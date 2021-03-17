@@ -8,8 +8,9 @@ This project is aimed at developing a web tool that will allow researchers to au
 
 **Pipeline**    
 
-**1. Save them in:**  
-  - Cell segmentation from microscope images using cellpose  
-  - ROI extarction  
-  - ROI classification using finetuned Resnet18  
+- Cell segmentation from microscope images using cellpose  
+- ROI extarction  
+- ROI classification using finetuned Resnet18  
+
+Streamlit was used to create the web app, which was then deployed to Heroku. 
   
