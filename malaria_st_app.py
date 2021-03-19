@@ -88,7 +88,7 @@ def get_prediction(arr):
 st.title('P. falciparum Malaria Detection and Classification')
 st.text('Segmentataion -> Single cell ROI -> Classification')
 
-page = st.sidebar.radio("Choose a stain", ('Giemsa', 'Stain type 2', 'Stain type 3'))
+page = st.sidebar.selectbox("Choose a stain", ('Giemsa', 'Stain type 2', 'Sample images'))
 
 st.sidebar.title("About")
 st.sidebar.info(" - Segmentation: [Cellpose] (https://github.com/MouseLand/cellpose)    \n \
@@ -96,17 +96,35 @@ st.sidebar.info(" - Segmentation: [Cellpose] (https://github.com/MouseLand/cellp
 - Trained on Giemsa stained P. _falsiparum_     \n \
 Powered by PyTorch, [Streamlit] (https://docs.streamlit.io/en/stable/api.html) ")
 
-file_up = st.file_uploader("Upload an image", type=["tif", "tiff", "png", "jpg", "jpeg"])
+
+
+file_up = None
+
+if page == 'Sample images':
+    img_list = ["./images/T0D2_1.tif", "./images/T14D2_2.tif", "./images/T38D2_2.tif", "./images/T48D2_2.tif" ]
+    img_captions = ["After 2 hours", "After 14 hours", "After 38 hours", "After 48 hours", "<choose>"]
+    st.image(img_list, caption = img_captions[:4], width = int(698/2))
+    selected_image = st.selectbox("Choose a sample image to analyze", img_captions, 4)
+    if selected_image != "<choose>":
+        selected_image = img_captions.index(selected_image)
+        file_up = img_list[selected_image]
+        # st.text(file_up)
+        image = tifffile.imread(file_up)
+
+else:
+    file_up = st.file_uploader("Upload an image", type=["tif", "tiff", "png", "jpg", "jpeg"])
+    if file_up:
+        image = imread(file_up)
 
 if file_up:
     # @st.cache
     # image = Image.open(file_up)
-    image = imread(file_up)
+    
 
     fig, ax = plt.subplots(figsize = (8,8))
     ax.imshow(image)
     ax.axis("off")
-    ax.set_title('Uploaded image')
+    ax.set_title('Selected image')
     st.pyplot(fig)
 
     st.subheader('Segmentation parameters')
@@ -124,8 +142,9 @@ if file_up:
     cellprob_threshold = st.slider('Cell probability threshold (decrease -> more cells)', -6, 6, -4, 1)
     st.write("", cellprob_threshold)
 
-    color_mask = st.color_picker('Pick a color for cell outlines', '#000000')
-    st.write('The current color is', color_mask)
+    color_mask = '#000000'
+    # color_mask = st.color_picker('Pick a color for cell outlines', '#000000')
+    # st.write('The current color is', color_mask)
 
     if st.checkbox('Run segmentation'):
         # DEFINE CELLPOSE MODEL
