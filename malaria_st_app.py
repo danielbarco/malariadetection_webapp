@@ -15,6 +15,7 @@ import numpy as np
 import torch
 import torchvision.transforms as transforms
 
+# from streamlit group
 from load_css import local_css
 local_css("style.css")
 
@@ -38,6 +39,7 @@ def run_segmentation(model, image, diam, channels, flow_threshold, cellprob_thre
                             )
     return masks, flows, styles, diams
 
+#from cellpose
 # @st.cache
 def show_cell_outlines(img, maski, color_mask):
 
@@ -58,6 +60,7 @@ def show_cell_outlines(img, maski, color_mask):
     ax.axis('off')
     
     return fig
+
 
 @st.cache
 def get_cell_outlines(masks):
@@ -251,10 +254,10 @@ if file_up:
                     paras = round(stage_count/total_count, 3)
                     out_stat.append((stage_count, paras))
                 st.markdown(f"""
-                    | Stage      |      Count                 |       %    |
-                    | -----------| -------------              | ---------- |
-                    | Uninfected |   {out_stat[0][0]}   |  {out_stat[0][1]}    | 
-                    | Ring       |    {out_stat[1][0]}   |   {out_stat[1][1]}  |
-                    | Troph      | {out_stat[2][0]}    |    {out_stat[2][1]} |
-                    | Shiz       |   {out_stat[3][0]}   |   {out_stat[3][1]}   |
+                    | Stage      |      Count         |       %             |
+                    | -----------| -------------      | ----------          |
+                    | Uninfected | {out_stat[0][0]}   |  {out_stat[0][1]}   | 
+                    | Ring       | {out_stat[1][0]}   |  {out_stat[1][1]}   |
+                    | Troph      | {out_stat[2][0]}   |  {out_stat[2][1]}   |
+                    | Shiz       | {out_stat[3][0]}   |  {out_stat[3][1]}   |
         """)
