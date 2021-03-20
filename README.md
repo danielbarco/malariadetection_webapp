@@ -8,9 +8,10 @@ This project is aimed at developing a web tool that will allow researchers to au
 
 **Pipeline**    
 
-- Cell segmentation from microscope images using cellpose  
+- Cell segmentation from microscope images using [cellpose](https://github.com/MouseLand/cellpose)  
 - ROI extarction  
-- ROI classification using finetuned Resnet18  
+- ROI classification using finetuned Resnet18 and/or SqueezeNet  
 
-Streamlit was used to create the web app, which was then deployed to Heroku. 
+The app was deployed to [Heroku](https://sleepy-escarpment-93127.herokuapp.com/). Note: it is much slower due to the limitations of the free-tier server.  
+Powered by PyTorch and [Streamlit](https://docs.streamlit.io/en/stable/api.html)  
   
