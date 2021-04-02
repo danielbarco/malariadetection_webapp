@@ -1,19 +1,16 @@
 
-import streamlit as st
-from cellpose import plot
-
-from cellpose import models, io, utils
-import cv2
-import tifffile
-from PIL import Image
-import time, os
-
-import matplotlib.pyplot as plt
-import matplotlib as mpl
 import numpy as np
+import streamlit as st
+from cellpose import models, io, utils
+from scipy.ndimage import find_objects
+import time, os
+import matplotlib.pyplot as plt
 
 import torch
 import torchvision.transforms as transforms
+import cv2
+import tifffile
+from PIL import Image
 
 # from streamlit group
 from load_css import local_css
@@ -36,7 +33,7 @@ def run_segmentation(model, image, diam, channels, flow_threshold, cellprob_thre
             channels = channels,
             invert = True,
             # rescale = 0.5,
-            net_avg=False,
+            net_avg = True,
             flow_threshold = flow_threshold, # 1
             cellprob_threshold = cellprob_threshold, # -4
                             )
@@ -64,11 +61,6 @@ def show_cell_outlines(img, maski, color_mask):
     
     return fig
 
-@st.cache(show_spinner=False)
-def get_cell_outlines(masks):
-    outlines_ls = utils.outlines_list(masks)
-    return outlines_ls
-
 @st.cache
 def transform_image(arr):
     my_transforms = transforms.Compose([transforms.Resize((224, 224)),
@@ -83,12 +75,6 @@ def transform_image(arr):
 
 class_names = ["un", 'ring', 'troph', 'shiz']
 
-def get_prediction(arr):
-    tensor = transform_image(arr)
-    outputs = model.forward(tensor)
-    _, y_hat = outputs.max(1)
-    return class_names[y_hat]
-
 
 st.title('P. falciparum Malaria Detection and Classification')
 st.text('Segmentataion -> Single cell ROI -> Classification')
@@ -100,7 +86,6 @@ st.sidebar.info(" - Segmentation: [Cellpose] (https://github.com/MouseLand/cellp
 - Classification of ROI: pretrained Resnet18 + fine-tuning      \n \
 - Trained on Giemsa stained P. _falsiparum_     \n \
 Powered by PyTorch, [Streamlit] (https://docs.streamlit.io/en/stable/api.html) ")
-
 
 
 file_up = None
@@ -173,13 +158,8 @@ if file_up:
                 # DISPLAY RESULTS
             fig = show_cell_outlines(image, masks, color_mask)
             st.pyplot(fig)
-        with st.spinner("Getting single cells"):
-            outlines_ls = get_cell_outlines(masks)
 
 
-
-
-        
         with st.spinner("Loading Model"):
             device = torch.device('cpu')
             # Load cnn model
@@ -187,7 +167,7 @@ if file_up:
             model = torch.load(PATH, map_location = device)
             model.eval()
         
-        size_thres = diameter*0.5
+        size_threshold = diameter*0.5 # in pix
         tmp_img = image.copy()
         d_results = {"un": [],
                     "ring": [],
@@ -197,31 +177,39 @@ if file_up:
         with st.spinner("Running inference..."):
         # st.text("Running inference ...")
             since = time.time()
-            for idx, cell in enumerate(outlines_ls[:]):
-                
-                x = cell.flatten()[::2]
-                y = cell.flatten()[1::2]
-
-                if (y.max() - y.min()) < size_thres or (x.max() - x.min()) < size_thres:
+      
+            objects = find_objects(masks)
+            ls_img = []
+            ls_outlines = []
+            # get crops with precise outlines
+            for n in range(masks.max()):
+                mn = np.array((masks==(n+1))*255, dtype = np.uint8)
+            #     print(np.sum(mn>0))
+                cell_mask = np.repeat(mn[:, :, np.newaxis], 3, axis=2)
+                masked_image = cv2.bitwise_and(tmp_img, cell_mask)
+                cell_pix = objects[n]
+                cell_roi = masked_image[cell_pix]
+                # remove small particles
+                if cell_roi.shape[0] < size_threshold or cell_roi.shape[1] < size_threshold:
                     continue
+                tensor_img = transform_image(cell_roi)
+                ls_img.append(tensor_img)
+                
+                # get cell outlines using masks
+                contours = cv2.findContours(mn, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+                out_pix_y, out_pix_x = np.concatenate(contours[-2], axis=0).squeeze().T  
+                # shift to the proper posiiton on the image
+                ls_outlines.append((out_pix_y, out_pix_x))   
 
-                # mask outline
-                mask = np.zeros(tmp_img.shape, dtype=np.uint8)
-                channel_count = tmp_img.shape[2]  # i.e. 3 or 4 depending on your image
-                ignore_mask_color = (255,)*channel_count
-                # fill contour
-                cv2.fillConvexPoly(mask, cell, ignore_mask_color)
-
-                masked_image = cv2.bitwise_and(tmp_img, mask)
-
-                # crop the box around the cell
-                (topy, topx) = (np.min(y), np.min(x))
-                (bottomy, bottomx) = (np.max(y), np.max(x))
-                out = masked_image[topy:bottomy+1, topx:bottomx+1,:]
-            #     plt.imshow(out)
-                stage = get_prediction(out)
-                d_results[stage].append(idx)
-            #     plt.show()
+            img_tensor = torch.cat(ls_img, dim=0)
+            bs = 128
+            ls_preds = []
+            part = img_tensor.shape[0]//bs
+            for p in range(part+1):
+                outputs = model.forward(img_tensor[bs*p:bs*p + bs])
+                ls_preds.append(outputs.data.numpy().argmax(1))
+            preds = np.concatenate(ls_preds)
+            results = [class_names[x] for x in preds]
         time_elapsed = time.time() - since
         st.write('time spent on classification {:.0f}m {:.0f}s'.format(
         time_elapsed // 60, time_elapsed % 60))
@@ -239,23 +227,23 @@ if file_up:
             # yellow: ring; magenta: troph; cyan: shiz
             ax.imshow(image)
 
-            for k in class_names:
-                if k!= "un" and len(d_results[k]) > 0:
-                    for cell in d_results[k]:
-                        coord = outlines_ls[cell]
-                        ax.plot(coord[:,0], coord[:,1], c = colors_stage[k], lw=1)
+            inf_cells = np.where(preds > 0)
+            for idx in inf_cells[0]:
+                ax.plot(ls_outlines[idx][0], ls_outlines[idx][1], \
+                                color = colors_stage[results[idx]], lw = 1)
             ax.set_title('Predicted infected cells')
             ax.axis('off')
             st.pyplot(fig)
 
-            total_count = sum(len(v)for v in d_results.values())
+            arr_results = np.array(results)
+            total_count = arr_results.size 
             st.write("Final cell count", total_count)
             out_stat = []
             for key in class_names:
-                stage_count = len(d_results[key])
+                stage_count = arr_results[arr_results == key].size
                 # st.write(key, stage_count, round(stage_count/total_count, 3))
-                paras = round(stage_count/total_count, 3)
-                out_stat.append((stage_count, paras))
+                parasetemia = round(stage_count/total_count, 3)
+                out_stat.append((stage_count, parasetemia))
             st.markdown(f"""
                 | Stage      |      Count         |       %             |
                 | -----------| -------------      | ----------          |
