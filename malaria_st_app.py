@@ -1,8 +1,9 @@
 
+import numpy as np
 import streamlit as st
-from cellpose import plot
 
-from cellpose import models, io, utils
+from cellpose import models, io
+from cellpose.utils import outlines_list, masks_to_outlines
 import cv2
 import tifffile
 from PIL import Image
@@ -10,7 +11,6 @@ import time, os
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-import numpy as np
 
 import torch
 import torchvision.transforms as transforms
@@ -46,7 +46,7 @@ def run_segmentation(model, image, diam, channels, flow_threshold, cellprob_thre
 # @st.cache
 def show_cell_outlines(img, maski, color_mask):
 
-    outlines = utils.masks_to_outlines(maski)
+    outlines = masks_to_outlines(maski)
     
     # plot the WordCloud image     
     fig, ax = plt.subplots(figsize = (8, 8))                   
@@ -66,7 +66,7 @@ def show_cell_outlines(img, maski, color_mask):
 
 @st.cache(show_spinner=False)
 def get_cell_outlines(masks):
-    outlines_ls = utils.outlines_list(masks)
+    outlines_ls = outlines_list(masks)
     return outlines_ls
 
 @st.cache
@@ -156,7 +156,6 @@ if file_up:
         # model_type='cyto' or model_type='nuclei'
         with st.spinner("Running segmentation"):
             model = models.Cellpose(gpu=False, model_type ='cyto')
-            diameter = 100
             # IF ALL YOUR IMAGES ARE THE SAME TYPE, you can give a list with 2 elements
             channels = [[0,0]] #* len(files) # IF YOU HAVE GRAYSCALE
 
@@ -170,14 +169,11 @@ if file_up:
             st.write('Time spent on segmentation {:.0f}m {:.0f}s'.format(
             time_elapsed // 60, time_elapsed % 60))
         # if st.button('Show results'):
-                # DISPLAY RESULTS
+            # DISPLAY RESULTS
             fig = show_cell_outlines(image, masks, color_mask)
             st.pyplot(fig)
         with st.spinner("Getting single cells"):
             outlines_ls = get_cell_outlines(masks)
-
-
-
 
         
         with st.spinner("Loading Model"):
@@ -211,17 +207,16 @@ if file_up:
                 ignore_mask_color = (255,)*channel_count
                 # fill contour
                 cv2.fillConvexPoly(mask, cell, ignore_mask_color)
-
+                # extract roi
                 masked_image = cv2.bitwise_and(tmp_img, mask)
-
                 # crop the box around the cell
                 (topy, topx) = (np.min(y), np.min(x))
                 (bottomy, bottomx) = (np.max(y), np.max(x))
                 out = masked_image[topy:bottomy+1, topx:bottomx+1,:]
-            #     plt.imshow(out)
+                # predict the stage of the cell p
                 stage = get_prediction(out)
                 d_results[stage].append(idx)
-            #     plt.show()
+  
         time_elapsed = time.time() - since
         st.write('time spent on classification {:.0f}m {:.0f}s'.format(
         time_elapsed // 60, time_elapsed % 60))

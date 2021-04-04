@@ -33,7 +33,7 @@ def run_segmentation(model, image, diam, channels, flow_threshold, cellprob_thre
             channels = channels,
             invert = True,
             # rescale = 0.5,
-            net_avg = True,
+            net_avg = False,
             flow_threshold = flow_threshold, # 1
             cellprob_threshold = cellprob_threshold, # -4
                             )
@@ -110,7 +110,6 @@ if file_up:
     # @st.cache
     # image = Image.open(file_up)
     
-
     fig, ax = plt.subplots(figsize = (8,8))
     ax.imshow(image)
     ax.axis("off")
@@ -121,8 +120,6 @@ if file_up:
 
     diameter = st.number_input('Diameter of the cells [pix]', 0, 500, 100, 10)
     st.write('The current number is ', diameter)
-
-
 
     flow_threshold = 1
     # flow_threshold = st.slider('Flow threshold (increase -> more cells)', .0, 1.1, 1.0, 0.1)
@@ -141,7 +138,7 @@ if file_up:
         # model_type='cyto' or model_type='nuclei'
         with st.spinner("Running segmentation"):
             model = models.Cellpose(gpu=False, model_type ='cyto')
-            diameter = 100
+            # diameter = 100
             # IF ALL YOUR IMAGES ARE THE SAME TYPE, you can give a list with 2 elements
             channels = [[0,0]] #* len(files) # IF YOU HAVE GRAYSCALE
 
