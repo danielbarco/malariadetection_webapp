@@ -135,9 +135,7 @@ if file_up:
     st.subheader('Segmentation parameters')
 
     diameter = st.number_input('Diameter of the cells [pix]', 0, 500, 100, 10)
-    st.write('The current number is ', diameter)
-
-
+    # st.write('The current number is ', diameter)
 
     flow_threshold = 1
     # flow_threshold = st.slider('Flow threshold (increase -> more cells)', .0, 1.1, 1.0, 0.1)
@@ -151,6 +149,11 @@ if file_up:
     # color_mask = st.color_picker('Pick a color for cell outlines', '#000000')
     # st.write('The current color is', color_mask)
 
+    no_diam = st.checkbox("Auto diameter computation")
+    if no_diam:
+        diameter = None
+        st.warning("Note: it takes more time to run with this option. After the first run you will see the computed diameter. \
+        Unchek the checkbox and manually put the computed diamater to speed up the app for future runs.")
     if st.button('Analyze'):
         # DEFINE CELLPOSE MODEL
         # model_type='cyto' or model_type='nuclei'
@@ -161,13 +164,15 @@ if file_up:
 
             since = time.time()
             # img = io.imread(filename)
-            masks, flows, styles, diams = run_segmentation(model, image, diameter, channels, 
+            masks, flows, styles, diam = run_segmentation(model, image, diameter, channels, 
                                                 flow_threshold, cellprob_threshold)
             st.text('Initial cell count: {} '.format(masks.max()))
-            
+            diameter = diam
             time_elapsed = time.time() - since
             st.write('Time spent on segmentation {:.0f}m {:.0f}s'.format(
             time_elapsed // 60, time_elapsed % 60))
+            if no_diam:
+                st.write('Computed diameter: {:.1f} pix'.format(diameter) )
         # if st.button('Show results'):
             # DISPLAY RESULTS
             fig = show_cell_outlines(image, masks, color_mask)
@@ -251,6 +256,7 @@ if file_up:
                 # st.write(key, stage_count, round(stage_count/total_count, 3))
                 paras = round(stage_count/total_count, 3)
                 out_stat.append((stage_count, paras))
+            st.write("Parasitemia", round((1- out_stat[0][1])*100, 2))
             st.markdown(f"""
                 | Stage      |      Count         |       %             |
                 | -----------| -------------      | ----------          |
