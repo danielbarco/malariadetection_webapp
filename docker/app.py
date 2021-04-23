@@ -134,7 +134,7 @@ if file_up:
 
     st.subheader('Segmentation parameters')
 
-    diameter = st.number_input('Diameter of the cells [pix]', 0, 500, 100, 10)
+    diameter = st.number_input('Diameter of the cells [pix]', 0, 500, 200, 10)
     st.write('The current number is ', diameter)
 
 
