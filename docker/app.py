@@ -2,7 +2,7 @@
 import numpy as np
 import streamlit as st
 
-from cellpose import models, io
+from cellpose import models
 from cellpose.utils import outlines_list, masks_to_outlines
 import cv2
 import tifffile
@@ -140,12 +140,12 @@ if file_up:
 
 
     flow_threshold = 1
-    # flow_threshold = st.slider('Flow threshold (increase -> more cells)', .0, 1.1, 1.0, 0.1)
-    # st.write("", flow_threshold)
+    flow_threshold = st.slider('Flow threshold (increase -> more cells)', .0, 1.1, 1.0, 0.1)
+    st.write("", flow_threshold)
 
     cellprob_threshold = -4
-    # cellprob_threshold = st.slider('Cell probability threshold (decrease -> more cells)', -6, 6, -4, 1)
-    # st.write("", cellprob_threshold)
+    cellprob_threshold = st.slider('Cell probability threshold (decrease -> more cells)', -6, 6, -4, 1)
+    st.write("", cellprob_threshold)
 
     color_mask = '#000000'
     # color_mask = st.color_picker('Pick a color for cell outlines', '#000000')
