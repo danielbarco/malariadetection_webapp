@@ -243,7 +243,7 @@ if file_up:
             ax.axis('off')
             st.pyplot(fig)
 
-            total_count = sum(len(v)for v in d_results.values())
+            total_count = sum(len(v)for v in d_results.values())$
             st.write("Final cell count", total_count)
             out_stat = []
             for key in class_names:
