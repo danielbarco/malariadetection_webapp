@@ -1,8 +1,7 @@
 
 import numpy as np
-import streamlit as st
 
-from cellpose import models
+from cellpose import utils, io, models, plot
 from cellpose.utils import outlines_list, masks_to_outlines
 import cv2
 import tifffile
@@ -12,8 +11,13 @@ import time, os
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 
-import torch
-import torchvision.transforms as transforms
+# import torch
+# import torchvision.transforms as transforms
+
+from tensorflow.keras.models import load_model
+from tensorflow.image import resize_with_pad
+from tensorflow import expand_dims
+from tensorflow.nn import softmax
 
 # from streamlit group
 from load_css import local_css
@@ -81,13 +85,21 @@ def transform_image(arr):
     im = Image.fromarray(arr)
     return my_transforms(im).unsqueeze(0)
 
-class_names = ["un", 'ring', 'troph', 'shiz']
+class_names = ['parasitized', 'uninfected']
 
 def get_prediction(arr):
     tensor = transform_image(arr)
     outputs = model.forward(tensor)
     _, y_hat = outputs.max(1)
     return class_names[y_hat]
+
+def get_prediction_tf(arr):
+    arr = resize_with_pad(arr, 100, 100, method= 'bilinear', antialias=False)
+    arr = expand_dims(arr, 0) # Create a batch
+    predictions = pair_D_ensemble_model.predict(arr)
+    score = softmax(predictions[0])
+    #print(class_names[np.argmax(score)])
+    return class_names[np.argmax(score)]
 
 
 st.title('P. falciparum Malaria Detection and Classification')
@@ -177,19 +189,21 @@ if file_up:
 
         
         with st.spinner("Loading Model"):
-            device = torch.device('cpu')
-            # Load cnn model
-            PATH = "model.pth"
-            model = torch.load(PATH, map_location = device)
-            model.eval()
+            PATH = 'ensemblemodel_pairD.h5'
+            pair_D_ensemble_model=load_model(PATH)
+            pair_D_ensemble_model.summary()
+            # device = torch.device('cpu')
+            # # Load cnn model
+            # PATH = "model.pth"
+            # model = torch.load(PATH, map_location = device)
+            # model.eval()
         
         size_thres = diameter*0.5
         tmp_img = image.copy()
-        d_results = {"un": [],
-                    "ring": [],
-                    "troph": [],
-                    "shiz": []
+        d_results = {"parasitized": [],
+                    "uninfected": [],
                     }
+        
         with st.spinner("Running inference..."):
         # st.text("Running inference ...")
             since = time.time()
@@ -214,7 +228,7 @@ if file_up:
                 (bottomy, bottomx) = (np.max(y), np.max(x))
                 out = masked_image[topy:bottomy+1, topx:bottomx+1,:]
                 # predict the stage of the cell p
-                stage = get_prediction(out)
+                stage = get_prediction_tf(out)
                 d_results[stage].append(idx)
   
         time_elapsed = time.time() - since
@@ -223,13 +237,10 @@ if file_up:
 
 
         with st.spinner("Plotting results"):
-            t = "<div> <span class='highlight yellow'> Ring </span> \
-                    <span class='highlight magenta'> Troph </span>      \
-                    <span class='highlight cyan'> Shiz </span>      </div>"
+            t = "<div> <span class='highlight red'> parasitized </span> </div>"
             st.markdown(t, unsafe_allow_html=True)
 
-            colors_stage = { "un": [1, 0, 0], "ring": "#ffc20a", 
-                "troph": "#40b0a6", "shiz": "#d35fb7" }
+            colors_stage = { "uninfected": [1, 0, 0], "parasitized": "#FF0000"}
             fig, ax = plt.subplots(figsize = (8,8))
             # yellow: ring; magenta: troph; cyan: shiz
             ax.imshow(image)
@@ -243,7 +254,7 @@ if file_up:
             ax.axis('off')
             st.pyplot(fig)
 
-            total_count = sum(len(v)for v in d_results.values())$
+            total_count = sum(len(v)for v in d_results.values())
             st.write("Final cell count", total_count)
             out_stat = []
             for key in class_names:
@@ -254,10 +265,9 @@ if file_up:
             par = (1 - out_stat[0][1])*100
             st.write("Parasitemia (%)", round(par, 2) )
             st.markdown(f"""
-                | Stage      |      Count         |       %             |
-                | -----------| -------------      | ----------          |
-                | Uninfected | {out_stat[0][0]}   |  {out_stat[0][1]}   | 
-                | Ring       | {out_stat[1][0]}   |  {out_stat[1][1]}   |
-                | Troph      | {out_stat[2][0]}   |  {out_stat[2][1]}   |
-                | Shiz       | {out_stat[3][0]}   |  {out_stat[3][1]}   |
-    """)
+                | Stage       |      Count         |       %             |
+                | ------------| -------------      | ----------          |
+                | Parasitized | {out_stat[0][0]}   |  {out_stat[0][1]}   | 
+                | Uninfected  | {out_stat[1][0]}   |  {out_stat[1][1]}   |
+
+            """)
