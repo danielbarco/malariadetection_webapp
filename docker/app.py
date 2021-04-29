@@ -1,5 +1,5 @@
-
 import numpy as np
+import streamlit as st
 
 from cellpose import utils, io, models, plot
 from cellpose.utils import outlines_list, masks_to_outlines
@@ -18,6 +18,7 @@ from tensorflow.keras.models import load_model
 from tensorflow.image import resize_with_pad
 from tensorflow import expand_dims
 from tensorflow.nn import softmax
+
 
 # from streamlit group
 from load_css import local_css
@@ -94,6 +95,7 @@ def get_prediction(arr):
     return class_names[y_hat]
 
 def get_prediction_tf(arr):
+    '''function for tf model; resizes and pads an image array and then returns the prediction i.e. the most likely class'''
     arr = resize_with_pad(arr, 100, 100, method= 'bilinear', antialias=False)
     arr = expand_dims(arr, 0) # Create a batch
     predictions = pair_D_ensemble_model.predict(arr)
@@ -109,9 +111,9 @@ page = st.sidebar.selectbox("Choose a stain", ('Giemsa', 'Stain type 2', 'Sample
 
 st.sidebar.title("About")
 st.sidebar.info(" - Segmentation: [Cellpose] (https://github.com/MouseLand/cellpose)    \n \
-- Classification of ROI: pretrained Resnet18 + fine-tuning      \n \
-- Trained on Giemsa stained P. _falsiparum_     \n \
-Powered by PyTorch, [Streamlit] (https://docs.streamlit.io/en/stable/api.html) ")
+- Classification: SqueezeNet + VGG19 [Article] (https://peerj.com/articles/6977.pdf) [GitHub] (https://github.com/sivaramakrishnan-rajaraman/Deep-Neural-Ensembles-toward-Malaria-Parasite-Detection-in-Thin-Blood-Smear-Images)     \n \
+- Trained on Giemsa stained P. _falsiparum_  [NIH Data] (https://lhncbc.nlm.nih.gov/LHC-downloads/downloads.html)   \n \
+- Powered by PyTorch, TensorFlow [Streamlit] (https://docs.streamlit.io/en/stable/api.html) ")
 
 
 
@@ -152,12 +154,12 @@ if file_up:
 
 
     flow_threshold = 1
-    flow_threshold = st.slider('Flow threshold (increase -> more cells)', .0, 1.1, 1.0, 0.1)
-    st.write("", flow_threshold)
+    # flow_threshold = st.slider('Flow threshold (increase -> more cells)', .0, 1.1, 1.0, 0.1)
+    # st.write("", flow_threshold)
 
-    cellprob_threshold = -4
-    cellprob_threshold = st.slider('Cell probability threshold (decrease -> more cells)', -6, 6, -4, 1)
-    st.write("", cellprob_threshold)
+    cellprob_threshold = 0
+    # cellprob_threshold = st.slider('Cell probability threshold (decrease -> more cells)', -6, 6, -4, 1)
+    # st.write("", cellprob_threshold)
 
     color_mask = '#000000'
     # color_mask = st.color_picker('Pick a color for cell outlines', '#000000')
@@ -240,13 +242,13 @@ if file_up:
             t = "<div> <span class='highlight red'> parasitized </span> </div>"
             st.markdown(t, unsafe_allow_html=True)
 
-            colors_stage = { "uninfected": [1, 0, 0], "parasitized": "#FF0000"}
+            colors_stage = { "parasitized": "#FF0000", "uninfected": [1, 0, 0]}
             fig, ax = plt.subplots(figsize = (8,8))
             # yellow: ring; magenta: troph; cyan: shiz
             ax.imshow(image)
 
             for k in class_names:
-                if k!= "un" and len(d_results[k]) > 0:
+                if k!= 'uninfected' and len(d_results[k]) > 0:
                     for cell in d_results[k]:
                         coord = outlines_ls[cell]
                         ax.plot(coord[:,0], coord[:,1], c = colors_stage[k], lw=1)
