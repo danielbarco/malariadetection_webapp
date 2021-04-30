@@ -153,17 +153,18 @@ if microscope:
     
     x, y, z = microscope.get_position_array()
     # fov: [4100, 3146]
-    colx, coly, colz = st.beta_columns(3)
+    colx, coly, colz, autofocus = st.beta_columns(4)
     with colx:
         x = colx.number_input('x-axis', -4100, 4100, x, 800)
     with coly:
         y = coly.number_input('y-axis', -3146, 3146, y, 640)
     with colz:
         z = colz.number_input('z-axis', -30000, 30000, z, 50)
+    with autofocus:
+        if st.button('Autofocus'):
+            microscope.autofocus()
     microscope.move([x,y,z])
     image = grab_image(x,y,z)
-    if st.button('Autofocus'):
-        microscope.autofocus()
     file_up = True
 elif page == 'Sample images':
     img_list = ["./images/T0D2_1.tif", "./images/T14D2_2.tif", "./images/T38D2_2.tif", "./images/T48D2_2.tif" ]
