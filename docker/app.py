@@ -19,10 +19,11 @@ from tensorflow.image import resize_with_pad
 from tensorflow import expand_dims
 from tensorflow.nn import softmax
 
-
 # from streamlit group
 from load_css import local_css
 local_css("style.css")
+
+from skimage.util import img_as_ubyte
 
 def imread(image_up):
     ext = os.path.splitext(image_up.name)[-1]
@@ -31,6 +32,7 @@ def imread(image_up):
         return img
     else:
         img = plt.imread(image_up)
+        img = img_as_ubyte(img)
     return img
 
 @st.cache(show_spinner=False)
@@ -242,13 +244,14 @@ if file_up:
             t = "<div> <span class='highlight red'> parasitized </span> </div>"
             st.markdown(t, unsafe_allow_html=True)
 
-            colors_stage = { "parasitized": "#FF0000", "uninfected": [1, 0, 0]}
+            colors_stage = { "parasitized": "#FF0000", "uninfected": '#458B00'}
             fig, ax = plt.subplots(figsize = (8,8))
             # yellow: ring; magenta: troph; cyan: shiz
             ax.imshow(image)
 
             for k in class_names:
-                if k!= 'uninfected' and len(d_results[k]) > 0:
+                # if k!= 'uninfected' and len(d_results[k]) > 0:
+                if len(d_results[k]) > 0:
                     for cell in d_results[k]:
                         coord = outlines_ls[cell]
                         ax.plot(coord[:,0], coord[:,1], c = colors_stage[k], lw=1)
