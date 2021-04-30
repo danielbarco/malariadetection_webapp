@@ -76,7 +76,7 @@ def get_cell_outlines(masks):
     outlines_ls = outlines_list(masks)
     return outlines_ls
 
-@st.cache
+@st.cache(show_spinner=False)
 def transform_image(arr):
     my_transforms = transforms.Compose([transforms.Resize((224, 224)),
                                         # transforms.CenterCrop(224),
@@ -105,18 +105,30 @@ def get_prediction_tf(arr):
     #print(class_names[np.argmax(score)])
     return class_names[np.argmax(score)]
 
-def check_openflexure(microscope):
+@st.cache(show_spinner=False)
+def check_openflexure(client_name = ''):
     '''sanity checking openflexure microscope'''
-    pos = microscope.position
-    starting_pos = pos.copy()
-    pos['x'] += 100
-    microscope.move(pos)
-    assert microscope.position == pos
-    pos['x'] -= 100
-    microscope.move(pos)
-    assert microscope.position == starting_pos
-    # Check the microscope will autofocus
-    ret = microscope.autofocus()
+    try:
+        microscope = ofm_client.MicroscopeClient(client_name)
+        pos = microscope.position
+        starting_pos = pos.copy()
+        pos['x'] += 100
+        microscope.move(pos)
+        assert microscope.position == pos
+        pos['x'] -= 100
+        microscope.move(pos)
+        assert microscope.position == starting_pos
+        # Check the microscope will autofocus
+        ret = microscope.autofocus()
+        return microscope
+    except:
+        pass
+
+
+@st.cache(show_spinner=False)
+def grab_image(x,y,z):
+    image = microscope.grab_image_array()
+    return image
 
 
 st.title('P. falciparum Malaria Detection')
@@ -131,21 +143,15 @@ st.sidebar.info(" - Segmentation: [Cellpose] (https://github.com/MouseLand/cellp
 - Powered by PyTorch, TensorFlow [Streamlit] (https://docs.streamlit.io/en/stable/api.html) ")
 
 with st.spinner("Connecting to Openflexure Microscope"):   
-    try:
-        microscope = ofm_client.MicroscopeClient("microscope")
-        check_openflexure(microscope)
-    except:
-        try:
-            microscope = ofm_client.find_first_microscope()
-            check_openflexure(microscope)
-        except:
-            pass
-        
-    # st.button('Analyze')
+    microscope = check_openflexure()
+    microscope = check_openflexure('microscope')
     
-x, y, z = microscope.get_position_array()
 
-with st.form(key='columns'):
+file_up = None
+
+if microscope:
+    
+    x, y, z = microscope.get_position_array()
     # fov: [4100, 3146]
     colx, coly, colz = st.beta_columns(3)
     with colx:
@@ -154,14 +160,10 @@ with st.form(key='columns'):
         y = coly.number_input('y-axis', -3146, 3146, y, 640)
     with colz:
         z = colz.number_input('z-axis', -30000, 30000, z, 50)
-    # if st.form_submit_button('Move'):
     microscope.move([x,y,z])
-    microscope.autofocus()
-
-file_up = None
-
-if microscope:
-    image = microscope.grab_image_array()
+    image = grab_image(x,y,z)
+    if st.button('Autofocus'):
+        microscope.autofocus()
     file_up = True
 elif page == 'Sample images':
     img_list = ["./images/T0D2_1.tif", "./images/T14D2_2.tif", "./images/T38D2_2.tif", "./images/T48D2_2.tif" ]
