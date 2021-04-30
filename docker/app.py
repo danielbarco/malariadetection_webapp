@@ -130,6 +130,11 @@ def grab_image(x,y,z):
     image = microscope.grab_image_array()
     return image
 
+def openflexure_autofocus(x,y):
+    microscope.autofocus()
+    x, y, z = microscope.get_position_array()
+    return x, y, z
+
 
 st.title('P. falciparum Malaria Detection')
 # st.text('Segmentataion -> Single cell ROI -> Classification')
@@ -162,7 +167,10 @@ if microscope:
         z = colz.number_input('z-axis', -30000, 30000, z, 50)
     with autofocus:
         if st.button('Autofocus'):
-            microscope.autofocus()
+            x,y,z = openflexure_autofocus(x, y)
+            print(z)
+            image = grab_image(x,y,z)
+            
     microscope.move([x,y,z])
     image = grab_image(x,y,z)
     file_up = True
