@@ -1,7 +1,7 @@
 import numpy as np
 import streamlit as st
 
-from cellpose import utils, io, models, plot
+from cellpose import models
 from cellpose.utils import outlines_list, masks_to_outlines
 import cv2
 import tifffile
@@ -9,7 +9,6 @@ from PIL import Image
 import time, os
 
 import matplotlib.pyplot as plt
-import matplotlib as mpl
 
 # import torch
 # import torchvision.transforms as transforms
@@ -24,6 +23,7 @@ from load_css import local_css
 local_css("style.css")
 
 from skimage.util import img_as_ubyte
+import openflexure_microscope_client as ofm_client
 
 def imread(image_up):
     ext = os.path.splitext(image_up.name)[-1]
@@ -105,9 +105,22 @@ def get_prediction_tf(arr):
     #print(class_names[np.argmax(score)])
     return class_names[np.argmax(score)]
 
+def check_openflexure(microscope):
+    '''sanity checking openflexure microscope'''
+    pos = microscope.position
+    starting_pos = pos.copy()
+    pos['x'] += 100
+    microscope.move(pos)
+    assert microscope.position == pos
+    pos['x'] -= 100
+    microscope.move(pos)
+    assert microscope.position == starting_pos
+    # Check the microscope will autofocus
+    ret = microscope.autofocus()
 
-st.title('P. falciparum Malaria Detection and Classification')
-st.text('Segmentataion -> Single cell ROI -> Classification')
+
+st.title('P. falciparum Malaria Detection')
+# st.text('Segmentataion -> Single cell ROI -> Classification')
 
 page = st.sidebar.selectbox("Choose a stain", ('Giemsa', 'Stain type 2', 'Sample images'))
 
@@ -117,11 +130,40 @@ st.sidebar.info(" - Segmentation: [Cellpose] (https://github.com/MouseLand/cellp
 - Trained on Giemsa stained P. _falsiparum_  [NIH Data] (https://lhncbc.nlm.nih.gov/LHC-downloads/downloads.html)   \n \
 - Powered by PyTorch, TensorFlow [Streamlit] (https://docs.streamlit.io/en/stable/api.html) ")
 
+with st.spinner("Connecting to Openflexure Microscope"):   
+    try:
+        microscope = ofm_client.MicroscopeClient("microscope")
+        check_openflexure(microscope)
+    except:
+        try:
+            microscope = ofm_client.find_first_microscope()
+            check_openflexure(microscope)
+        except:
+            pass
+        
+    # st.button('Analyze')
+    
+x, y, z = microscope.get_position_array()
 
+with st.form(key='columns'):
+    # fov: [4100, 3146]
+    colx, coly, colz = st.beta_columns(3)
+    with colx:
+        x = colx.number_input('x-axis', -4100, 4100, x, 800)
+    with coly:
+        y = coly.number_input('y-axis', -3146, 3146, y, 640)
+    with colz:
+        z = colz.number_input('z-axis', -30000, 30000, z, 50)
+    # if st.form_submit_button('Move'):
+    microscope.move([x,y,z])
+    microscope.autofocus()
 
 file_up = None
 
-if page == 'Sample images':
+if microscope:
+    image = microscope.grab_image_array()
+    file_up = True
+elif page == 'Sample images':
     img_list = ["./images/T0D2_1.tif", "./images/T14D2_2.tif", "./images/T38D2_2.tif", "./images/T48D2_2.tif" ]
     img_captions = ["After 2 hours", "After 14 hours", "After 38 hours", "After 48 hours", "<choose>"]
     st.image(img_list, caption = img_captions[:4], width = int(698/2))
@@ -131,7 +173,6 @@ if page == 'Sample images':
         file_up = img_list[selected_image]
         # st.text(file_up)
         image = tifffile.imread(file_up)
-
 else:
     file_up = st.file_uploader("Upload an image", type=["tif", "tiff", "png", "jpg", "jpeg"])
     if file_up:
@@ -241,7 +282,8 @@ if file_up:
 
 
         with st.spinner("Plotting results"):
-            t = "<div> <span class='highlight red'> parasitized </span> </div>"
+            t = "<div> <span class='highlight darkgreen'> Uninfected </span> \
+            <span class='highlight red'> Parasitized </span>"
             st.markdown(t, unsafe_allow_html=True)
 
             colors_stage = { "parasitized": "#FF0000", "uninfected": '#458B00'}

@@ -8,12 +8,9 @@
   padding-left: 1rem;
   font-weight: 700;
 }
-.magenta {
-  background-color: #40b0a6;
+.red {
+  background-color: #FF0000;
 }
-.yellow {
-  background-color: #ffc20a;
+.darkgreen {
+  background-color: #458B00;
 }
-.cyan {
-    background-color: #d35fb7;
-  }

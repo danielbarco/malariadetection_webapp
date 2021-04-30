@@ -1,4 +1,4 @@
-FROM python:3.6-slim-buster
+FROM python:3.8-slim-buster
 
 EXPOSE 8501
 
@@ -11,9 +11,10 @@ WORKDIR /app
 
 RUN pip install scikit-image
 RUN pip install torch==1.8.1+cpu torchvision==0.9.1+cpu -f https://download.pytorch.org/whl/torch_stable.html
-RUN pip install streamlit==0.79.0
+RUN pip install streamlit==0.81
 RUN pip install matplotlib
 RUN pip install tensorflow==2.4.1
+RUN pip install openflexure-microscope-client
 RUN pip install cellpose==0.6.1
 # cellpose requires large models, load these from cache with:
 RUN python -c 'from cellpose import models'
