@@ -4,7 +4,7 @@ This project is aimed at developing a web tool that will allow researchers to au
 
 ## Demo
 
-![Malaria app Demo](demo3.gif)  
+![Malaria app Demo](malatec_mvp.gif)  
 
 **Pipeline**    
 
