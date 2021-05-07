@@ -7,11 +7,14 @@ import cv2
 import tifffile
 from PIL import Image
 import time, os
+import json
+import requests
+import io
 
 import matplotlib.pyplot as plt
 
 # import torch
-# import torchvision.transforms as transforms
+import torchvision.transforms as transforms
 
 from tensorflow.keras.models import load_model
 from tensorflow.image import resize_with_pad
@@ -50,7 +53,7 @@ def run_segmentation(model, image, diam, channels, flow_threshold, cellprob_thre
     return masks, flows, styles, diams
 
 #from cellpose
-# @st.cache
+@st.cache
 def show_cell_outlines(img, maski, color_mask):
 
     outlines = masks_to_outlines(maski)
@@ -124,17 +127,45 @@ def check_openflexure(client_name = ''):
     except:
         pass
 
-
 @st.cache(show_spinner=False)
+def capture_full_resolution_image(base_uri, params: dict = None):
+    """Capture an image and return it as a image """
+    payload = {
+        "use_video_port": False,
+        "bayer": False,
+    }
+    if params:
+        payload.update(params)
+    r = requests.post(base_uri + "/actions/camera/capture", json=payload, headers={'Accept': 'image/jpeg'}, timeout =60)
+    r.raise_for_status()
+    action_href = json.loads(r.content.decode('utf-8'))['href']
+    time.sleep(2)
+    r = requests.get(action_href)
+    if json.loads(r.content.decode('utf-8'))['output'] is not None:
+        r = requests.get(json.loads(r.content.decode('utf-8'))['output']['links']['download']['href'])
+        image = np.array(Image.open(io.BytesIO(r.content)))
+        return image
+    else:
+        time.sleep(2)
+        if json.loads(r.content.decode('utf-8'))['output'] is not None:
+            r = requests.get(json.loads(r.content.decode('utf-8'))['output']['links']['download']['href'])
+            image = np.array(Image.open(io.BytesIO(r.content)))
+            return image
+        
+# @st.cache(show_spinner=False)
 def grab_image(x,y,z):
     image = microscope.grab_image_array()
     return image
+
+@st.cache(allow_output_mutation=True)
+def status_inputs():
+    return {"x": None, "y": None, "z": None, "autofocus": None,}
+
 
 def openflexure_autofocus(x,y):
     microscope.autofocus()
     x, y, z = microscope.get_position_array()
     return x, y, z
-
 
 st.title('P. falciparum Malaria Detection')
 # st.text('Segmentataion -> Single cell ROI -> Classification')
@@ -155,25 +186,46 @@ with st.spinner("Connecting to Openflexure Microscope"):
 file_up = None
 
 if microscope:
-    
     x, y, z = microscope.get_position_array()
     # fov: [4100, 3146]
+    # image = grab_image(x,y,z)
     colx, coly, colz, autofocus = st.beta_columns(4)
     with colx:
-        x = colx.number_input('x-axis', -4100, 4100, x, 800)
+        if st.number_input('x-axis', -20000, 20000, x, 800):
+            status_inputs.update({"x": True})
+            # x = colx.number_input('x-axis', -20000, 20000, x, 800)
+            # 
     with coly:
-        y = coly.number_input('y-axis', -3146, 3146, y, 640)
+        if st.number_input('y-axis', -20000, 20000, y, 640):
+            status_inputs.update({"y": True})
+            # y = coly.number_input('y-axis', -20000, 20000, y, 640)
+            # microscope.move([x,y,z])
     with colz:
-        z = colz.number_input('z-axis', -30000, 30000, z, 50)
-    with autofocus:
-        if st.button('Autofocus'):
-            x,y,z = openflexure_autofocus(x, y)
-            print(z)
-            image = grab_image(x,y,z)
+        if st.number_input('z-axis', -30000, 30000, z, 50):
+            status_inputs.update({"z": True})
+            # z = colz.number_input('z-axis', -30000, 30000, z, 50)
+            # microscope.move([x,y,z])
+    # with autofocus:
+    if st.button('Autofocus'):
+        update_inputs.update({"autofocus": True})
+        x,y,z = openflexure_autofocus(x, y)
+    # if st.button('High resolution image'):
+    #     print(image.shape)
+    
+    if status_inputs["x"]:
+        microscope.move([x,y,z])
+    if status_inputs["y"]:
+        microscope.move([x,y,z])
+    if status_inputs["z"]:
+        microscope.move([x,y,z])
+    if status_inputs["autofocus"]:
+        microscope.move([x,y,z])
+        
             
-    microscope.move([x,y,z])
-    image = grab_image(x,y,z)
+    image = capture_full_resolution_image(microscope.base_uri)
+
     file_up = True
+
 elif page == 'Sample images':
     img_list = ["./images/T0D2_1.tif", "./images/T14D2_2.tif", "./images/T38D2_2.tif", "./images/T48D2_2.tif" ]
     img_captions = ["After 2 hours", "After 14 hours", "After 38 hours", "After 48 hours", "<choose>"]
@@ -202,7 +254,7 @@ if file_up:
 
     st.subheader('Segmentation parameters')
 
-    diameter = st.number_input('Diameter of the cells [pix]', 0, 500, 150, 10)
+    diameter = st.number_input('Diameter of the cells [pix]', 0, 500, 190, 10)
     st.write('The current number is ', diameter)
 
 
@@ -220,6 +272,7 @@ if file_up:
     # st.write('The current color is', color_mask)
 
     if st.button('Analyze'):
+        print(image.shape)
         # DEFINE CELLPOSE MODEL
         # model_type='cyto' or model_type='nuclei'
         with st.spinner("Running segmentation"):
