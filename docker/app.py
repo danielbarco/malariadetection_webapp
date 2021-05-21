@@ -53,7 +53,7 @@ def run_segmentation(model, image, diam, channels, flow_threshold, cellprob_thre
     return masks, flows, styles, diams
 
 #from cellpose
-@st.cache
+# @st.cache(show_spinner=False)
 def show_cell_outlines(img, maski, color_mask):
 
     outlines = masks_to_outlines(maski)
@@ -152,13 +152,37 @@ def capture_full_resolution_image(base_uri, params: dict = None):
             image = np.array(Image.open(io.BytesIO(r.content)))
             return image
         
+def capture_full_resolution_image_no_cache(base_uri, params: dict = None):
+    """Capture an image and return it as a image streamlit no cache"""
+    payload = {
+        "use_video_port": False,
+        "bayer": False,
+    }
+    if params:
+        payload.update(params)
+    r = requests.post(base_uri + "/actions/camera/capture", json=payload, headers={'Accept': 'image/jpeg'}, timeout =60)
+    r.raise_for_status()
+    action_href = json.loads(r.content.decode('utf-8'))['href']
+    time.sleep(2)
+    r = requests.get(action_href)
+    if json.loads(r.content.decode('utf-8'))['output'] is not None:
+        r = requests.get(json.loads(r.content.decode('utf-8'))['output']['links']['download']['href'])
+        image = np.array(Image.open(io.BytesIO(r.content)))
+        return image
+    else:
+        time.sleep(2)
+        if json.loads(r.content.decode('utf-8'))['output'] is not None:
+            r = requests.get(json.loads(r.content.decode('utf-8'))['output']['links']['download']['href'])
+            image = np.array(Image.open(io.BytesIO(r.content)))
+            return image
+        
 # @st.cache(show_spinner=False)
 def grab_image(x,y,z):
     image = microscope.grab_image_array()
     return image
 
 @st.cache(allow_output_mutation=True)
-def status_inputs():
+def return_inputs():
     return {"x": None, "y": None, "z": None, "autofocus": None,}
 
 
@@ -185,44 +209,54 @@ with st.spinner("Connecting to Openflexure Microscope"):
 
 file_up = None
 
+# if we detect a microscope run this code:
 if microscope:
+    
+    image = capture_full_resolution_image(microscope.base_uri)
     x, y, z = microscope.get_position_array()
     # fov: [4100, 3146]
-    # image = grab_image(x,y,z)
-    colx, coly, colz, autofocus = st.beta_columns(4)
+
+    status_inputs = return_inputs()
+    colx, coly = st.beta_columns(2)
     with colx:
-        if st.number_input('x-axis', -20000, 20000, x, 800):
+        user_x = colx.number_input('x-axis', -20000, 20000, x, 800)
+        if user_x:
+            x = user_x
             status_inputs.update({"x": True})
-            # x = colx.number_input('x-axis', -20000, 20000, x, 800)
-            # 
     with coly:
-        if st.number_input('y-axis', -20000, 20000, y, 640):
+        user_y = coly.number_input('y-axis', -20000, 20000, y, 640)
+        if user_y:
+            y = user_y
             status_inputs.update({"y": True})
-            # y = coly.number_input('y-axis', -20000, 20000, y, 640)
-            # microscope.move([x,y,z])
-    with colz:
-        if st.number_input('z-axis', -30000, 30000, z, 50):
-            status_inputs.update({"z": True})
-            # z = colz.number_input('z-axis', -30000, 30000, z, 50)
-            # microscope.move([x,y,z])
+    # with colz:
+    #     user_z = colz.number_input('z-axis', -30000, 30000, z, 2)
+    #     if user_z:
+    #         z = user_z
+    #         status_inputs.update({"z": True})
     # with autofocus:
-    if st.button('Autofocus'):
-        update_inputs.update({"autofocus": True})
-        x,y,z = openflexure_autofocus(x, y)
+    #     if autofocus.button('Autofocus'):
+    #         status_inputs.update({"autofocus": True})
+        
     # if st.button('High resolution image'):
     #     print(image.shape)
     
-    if status_inputs["x"]:
+    if status_inputs["x"] or status_inputs["y"]:
         microscope.move([x,y,z])
-    if status_inputs["y"]:
-        microscope.move([x,y,z])
-    if status_inputs["z"]:
-        microscope.move([x,y,z])
-    if status_inputs["autofocus"]:
-        microscope.move([x,y,z])
+        x,y,z = openflexure_autofocus(x, y)  
+        image = capture_full_resolution_image_no_cache(microscope.base_uri)
         
+    # if status_inputs['z']:
+    #     microscope.move([x,y,z])
+    #     image = capture_full_resolution_image_no_cache(microscope.base_uri)
+        
+         
+
+    # if status_inputs["autofocus"]:
+        
+    #     image = capture_full_resolution_image_no_cache(microscope.base_uri)
+   
+    
             
-    image = capture_full_resolution_image(microscope.base_uri)
 
     file_up = True
 
@@ -272,7 +306,7 @@ if file_up:
     # st.write('The current color is', color_mask)
 
     if st.button('Analyze'):
-        print(image.shape)
+        print(x, y, z)
         # DEFINE CELLPOSE MODEL
         # model_type='cyto' or model_type='nuclei'
         with st.spinner("Running segmentation"):
@@ -373,7 +407,7 @@ if file_up:
                 # st.write(key, stage_count, round(stage_count/total_count, 3))
                 paras = round(stage_count/total_count, 3)
                 out_stat.append((stage_count, paras))
-            par = (1 - out_stat[0][1])*100
+            par = (out_stat[0][1])*100
             st.write("Parasitemia (%)", round(par, 2) )
             st.markdown(f"""
                 | Stage       |      Count         |       %             |
