@@ -2,6 +2,8 @@
 
 This project is a proof of concept, where we use a 3D printed [Openflexure microscope](https://openflexure.org/) to take pictures and then detect malaria. We use [NIH images](https://lhncbc.nlm.nih.gov/LHC-downloads/downloads.html#malaria-datasets) to train our model. 
 
+The app also functions without an openflexure microscope just by uploading images.
+
 ## Demo
 
 ![Malaria app Demo](malatec_mvp2.gif)  
