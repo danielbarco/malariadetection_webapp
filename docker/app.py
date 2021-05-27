@@ -286,11 +286,11 @@ if file_up:
     ax.set_title('Selected image')
     st.pyplot(fig)
 
-    st.subheader('Segmentation parameters')
+    # st.subheader('Segmentation parameters')
 
-    diameter = st.number_input('Diameter of the cells [pix]', 0, 500, 190, 10)
-    st.write('The current number is ', diameter)
-
+    # diameter = st.number_input('Diameter of the cells [pix]', 0, 500, 190, 10)
+    # st.write('The current diameter is ', diameter)
+    diameter = 190
 
 
     flow_threshold = 1
