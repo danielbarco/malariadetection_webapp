@@ -23,9 +23,11 @@ Follow the link provided in the console and you should be able to see the stream
 
 **Pipeline**    
 
-- Cell segmentation from microscope images using [cellpose](https://github.com/MouseLand/cellpose)  
-- Classification: SqueezeNet + VGG19 [Article](https://peerj.com/articles/6977.pdf) [GitHub](https://github.com/sivaramakrishnan-rajaraman/Deep-Neural-Ensembles-toward-Malaria-Parasite-Detection-in-Thin-Blood-Smear-Images)
+- Cell segmentation from microscope images using [Article](https://www.biorxiv.org/content/10.1101/2020.02.02.931238v1) | [GitHub](https://github.com/MouseLand/cellpose)  
+- Classification: SqueezeNet + VGG19 [Article](https://peerj.com/articles/6977.pdf) | [GitHub](https://github.com/sivaramakrishnan-rajaraman/Deep-Neural-Ensembles-toward-Malaria-Parasite-Detection-in-Thin-Blood-Smear-Images)
 - Powered by PyTorch, Tensorflow and [Streamlit](https://docs.streamlit.io/en/stable/api.html)  
+
+**[Publicly Available Malria Datasets](https://github.com/danielbarco/malaria_datasets)**
 
 Made with ❤️ in Switzerland ⛰️
   
