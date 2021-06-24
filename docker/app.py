@@ -285,12 +285,12 @@ if file_up:
     ax.axis("off")
     ax.set_title('Selected image')
     st.pyplot(fig)
-
-    # st.subheader('Segmentation parameters')
-
-    # diameter = st.number_input('Diameter of the cells [pix]', 0, 500, 190, 10)
-    # st.write('The current diameter is ', diameter)
-    diameter = 190
+    if microscope:
+        diameter = 190
+    else:
+        st.subheader('Segmentation parameters')
+        diameter = st.number_input('Diameter of the cells [pix]', 0, 500, 190, 10)
+        st.write('The current diameter is ', diameter)
 
 
     flow_threshold = 1
@@ -306,7 +306,7 @@ if file_up:
     # st.write('The current color is', color_mask)
 
     if st.button('Analyze'):
-        print(x, y, z)
+        #print(x, y, z)
         # DEFINE CELLPOSE MODEL
         # model_type='cyto' or model_type='nuclei'
         with st.spinner("Running segmentation"):
