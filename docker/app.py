@@ -11,7 +11,7 @@ import json
 import requests
 import io
 from os import listdir
-from os.path import isfile, join, path
+from os.path import isfile, join
 
 import matplotlib.pyplot as plt
 
@@ -151,7 +151,7 @@ if page == 'Thick Smear | Sample images':
         file_up = img_list[selected_image]
         st.text(file_up) 
         img = plt.imread(file_up)
-        img = img_as_ubyte(img)
+        image = img_as_ubyte(img)
         
 else:
     file_up = st.file_uploader("Upload an image", type=["tif", "tiff", "png", "jpg", "jpeg"])
@@ -159,9 +159,6 @@ else:
         image = imread(file_up)
 
 if file_up:
-    # @st.cache
-    # image = Image.open(file_up)
-    
 
     fig, ax = plt.subplots(figsize = (8,8))
     ax.imshow(image)
@@ -170,29 +167,20 @@ if file_up:
     st.pyplot(fig)
 
     if page == 'Thin Smear' or page == 'Thin Smear | Sample images':
-        flow_threshold = 0.4
-        # flow_threshold = st.slider('Flow threshold (increase -> more cells)', .0, 1.1, 1.0, 0.1)
-        # st.write("", flow_threshold)
+        flow_threshold = 0.4 # default (increase -> more cells)
 
-        cellprob_threshold = 0.0
-        # cellprob_threshold = st.slider('Cell probability threshold (decrease -> more cells)', -6, 6, -4, 1)
-        # st.write("", cellprob_threshold)
+        cellprob_threshold = 0.0 # default (decrease -> more cells)
 
         color_mask = '#000000'
-        # color_mask = st.color_picker('Pick a color for cell outlines', '#000000')
-        # st.write('The current color is', color_mask)
 
         # if st.button('Analyze'):
-        #print(x, y, z)
-        # DEFINE CELLPOSE MODEL
-        # model_type='cyto' or model_type='nuclei'
+
         with st.spinner("Running segmentation"):
             model = models.Cellpose(gpu=False, model_type ='cyto')
             # IF ALL YOUR IMAGES ARE THE SAME TYPE, you can give a list with 2 elements
             channels = [[0,0]] #* len(files) # IF YOU HAVE GRAYSCALE
 
             since = time.time()
-            # img = io.imread(filename)
             masks, flows, styles, diams = run_segmentation(model, image, None, channels, 
                                                 flow_threshold, cellprob_threshold)
             st.text('Initial cell count: {} '.format(masks.max()))
@@ -200,8 +188,7 @@ if file_up:
             time_elapsed = time.time() - since
             st.write('Time spent on segmentation {:.0f}m {:.0f}s'.format(
             time_elapsed // 60, time_elapsed % 60))
-        # if st.button('Show results'):
-            # DISPLAY RESULTS
+
             fig = show_cell_outlines(image, masks, color_mask)
             st.pyplot(fig)
         with st.spinner("Getting single cells"):
@@ -293,7 +280,7 @@ if file_up:
 
             """)
                 
-    if page == 'Thick Smear':
+    if page == 'Thick Smear' or page == 'Thick Smear | Sample images':
         
         with st.spinner("Loading thick smear model"):
             # Load pipeline config and build a detection model
