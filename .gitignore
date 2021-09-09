@@ -29,6 +29,7 @@ share/python-wheels/
 *.egg
 MANIFEST
 bin/
+docker/models
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
