@@ -26,7 +26,6 @@ from load_css import local_css
 local_css("style.css")
 
 from skimage.util import img_as_ubyte
-import openflexure_microscope_client as ofm_client
 
 def imread(image_up):
     ext = os.path.splitext(image_up.name)[-1]
@@ -107,94 +106,17 @@ def get_prediction_tf(arr):
     score = softmax(predictions[0])
     #print(class_names[np.argmax(score)])
     return class_names[np.argmax(score)]
-
-@st.cache(show_spinner=False)
-def check_openflexure(client_name = ''):
-    '''sanity checking openflexure microscope'''
-    try:
-        microscope = ofm_client.MicroscopeClient(client_name)
-        pos = microscope.position
-        starting_pos = pos.copy()
-        pos['x'] += 100
-        microscope.move(pos)
-        assert microscope.position == pos
-        pos['x'] -= 100
-        microscope.move(pos)
-        assert microscope.position == starting_pos
-        # Check the microscope will autofocus
-        ret = microscope.autofocus()
-        return microscope
-    except:
-        pass
-
-@st.cache(show_spinner=False)
-def capture_full_resolution_image(base_uri, params: dict = None):
-    """Capture an image and return it as a image """
-    payload = {
-        "use_video_port": False,
-        "bayer": False,
-    }
-    if params:
-        payload.update(params)
-    r = requests.post(base_uri + "/actions/camera/capture", json=payload, headers={'Accept': 'image/jpeg'}, timeout =60)
-    r.raise_for_status()
-    action_href = json.loads(r.content.decode('utf-8'))['href']
-    time.sleep(2)
-    r = requests.get(action_href)
-    if json.loads(r.content.decode('utf-8'))['output'] is not None:
-        r = requests.get(json.loads(r.content.decode('utf-8'))['output']['links']['download']['href'])
-        image = np.array(Image.open(io.BytesIO(r.content)))
-        return image
-    else:
-        time.sleep(2)
-        if json.loads(r.content.decode('utf-8'))['output'] is not None:
-            r = requests.get(json.loads(r.content.decode('utf-8'))['output']['links']['download']['href'])
-            image = np.array(Image.open(io.BytesIO(r.content)))
-            return image
-        
-def capture_full_resolution_image_no_cache(base_uri, params: dict = None):
-    """Capture an image and return it as a image streamlit no cache"""
-    payload = {
-        "use_video_port": False,
-        "bayer": False,
-    }
-    if params:
-        payload.update(params)
-    r = requests.post(base_uri + "/actions/camera/capture", json=payload, headers={'Accept': 'image/jpeg'}, timeout =60)
-    r.raise_for_status()
-    action_href = json.loads(r.content.decode('utf-8'))['href']
-    time.sleep(2)
-    r = requests.get(action_href)
-    if json.loads(r.content.decode('utf-8'))['output'] is not None:
-        r = requests.get(json.loads(r.content.decode('utf-8'))['output']['links']['download']['href'])
-        image = np.array(Image.open(io.BytesIO(r.content)))
-        return image
-    else:
-        time.sleep(2)
-        if json.loads(r.content.decode('utf-8'))['output'] is not None:
-            r = requests.get(json.loads(r.content.decode('utf-8'))['output']['links']['download']['href'])
-            image = np.array(Image.open(io.BytesIO(r.content)))
-            return image
-        
-# @st.cache(show_spinner=False)
-def grab_image(x,y,z):
-    image = microscope.grab_image_array()
-    return image
+      
 
 @st.cache(allow_output_mutation=True)
 def return_inputs():
     return {"x": None, "y": None, "z": None, "autofocus": None,}
 
 
-def openflexure_autofocus(x,y):
-    microscope.autofocus()
-    x, y, z = microscope.get_position_array()
-    return x, y, z
-
 st.title('P. falciparum Malaria Detection')
 # st.text('Segmentataion -> Single cell ROI -> Classification')
 
-page = st.sidebar.selectbox("Choose a stain", ('Giemsa', 'Stain type 2', 'Sample images'))
+page = st.sidebar.selectbox("Choose a stain", ('Thick Smear', 'Thin Smear', 'Thin Smear | Sample images'))
 
 st.sidebar.title("About")
 st.sidebar.info(" - Segmentation: [Cellpose] (https://github.com/MouseLand/cellpose)    \n \
@@ -202,65 +124,10 @@ st.sidebar.info(" - Segmentation: [Cellpose] (https://github.com/MouseLand/cellp
 - Trained on Giemsa stained P. _falsiparum_  [NIH Data] (https://lhncbc.nlm.nih.gov/LHC-downloads/downloads.html)   \n \
 - Powered by PyTorch, TensorFlow [Streamlit] (https://docs.streamlit.io/en/stable/api.html) ")
 
-with st.spinner("Connecting to Openflexure Microscope"):   
-    microscope = check_openflexure()
-    microscope = check_openflexure('microscope')
-    
 
 file_up = None
 
-# if we detect a microscope run this code:
-if microscope:
-    
-    image = capture_full_resolution_image(microscope.base_uri)
-    x, y, z = microscope.get_position_array()
-    # fov: [4100, 3146]
-
-    status_inputs = return_inputs()
-    colx, coly = st.beta_columns(2)
-    with colx:
-        user_x = colx.number_input('x-axis', -20000, 20000, x, 800)
-        if user_x:
-            x = user_x
-            status_inputs.update({"x": True})
-    with coly:
-        user_y = coly.number_input('y-axis', -20000, 20000, y, 640)
-        if user_y:
-            y = user_y
-            status_inputs.update({"y": True})
-    # with colz:
-    #     user_z = colz.number_input('z-axis', -30000, 30000, z, 2)
-    #     if user_z:
-    #         z = user_z
-    #         status_inputs.update({"z": True})
-    # with autofocus:
-    #     if autofocus.button('Autofocus'):
-    #         status_inputs.update({"autofocus": True})
-        
-    # if st.button('High resolution image'):
-    #     print(image.shape)
-    
-    if status_inputs["x"] or status_inputs["y"]:
-        microscope.move([x,y,z])
-        x,y,z = openflexure_autofocus(x, y)  
-        image = capture_full_resolution_image_no_cache(microscope.base_uri)
-        
-    # if status_inputs['z']:
-    #     microscope.move([x,y,z])
-    #     image = capture_full_resolution_image_no_cache(microscope.base_uri)
-        
-         
-
-    # if status_inputs["autofocus"]:
-        
-    #     image = capture_full_resolution_image_no_cache(microscope.base_uri)
-   
-    
-            
-
-    file_up = True
-
-elif page == 'Sample images':
+if page == 'Thin Smear | Sample images':
     img_list = ["./images/T0D2_1.tif", "./images/T14D2_2.tif", "./images/T38D2_2.tif", "./images/T48D2_2.tif" ]
     img_captions = ["After 2 hours", "After 14 hours", "After 38 hours", "After 48 hours", "<choose>"]
     st.image(img_list, caption = img_captions[:4], width = int(698/2))
@@ -268,7 +135,7 @@ elif page == 'Sample images':
     if selected_image != "<choose>":
         selected_image = img_captions.index(selected_image)
         file_up = img_list[selected_image]
-        # st.text(file_up)
+        # st.text(file_up) 
         image = tifffile.imread(file_up)
 else:
     file_up = st.file_uploader("Upload an image", type=["tif", "tiff", "png", "jpg", "jpeg"])
@@ -285,19 +152,13 @@ if file_up:
     ax.axis("off")
     ax.set_title('Selected image')
     st.pyplot(fig)
-    if microscope:
-        diameter = 190
-    else:
-        st.subheader('Segmentation parameters')
-        diameter = st.number_input('Diameter of the cells [pix]', 0, 500, 190, 10)
-        st.write('The current diameter is ', diameter)
 
 
-    flow_threshold = 1
+    flow_threshold = 0.4
     # flow_threshold = st.slider('Flow threshold (increase -> more cells)', .0, 1.1, 1.0, 0.1)
     # st.write("", flow_threshold)
 
-    cellprob_threshold = 0
+    cellprob_threshold = 0.0
     # cellprob_threshold = st.slider('Cell probability threshold (decrease -> more cells)', -6, 6, -4, 1)
     # st.write("", cellprob_threshold)
 
@@ -316,7 +177,7 @@ if file_up:
 
             since = time.time()
             # img = io.imread(filename)
-            masks, flows, styles, diams = run_segmentation(model, image, diameter, channels, 
+            masks, flows, styles, diams = run_segmentation(model, image, None, channels, 
                                                 flow_threshold, cellprob_threshold)
             st.text('Initial cell count: {} '.format(masks.max()))
             
@@ -341,7 +202,7 @@ if file_up:
             # model = torch.load(PATH, map_location = device)
             # model.eval()
         
-        size_thres = diameter*0.5
+        # size_thres = diameter*0.5
         tmp_img = image.copy()
         d_results = {"parasitized": [],
                     "uninfected": [],
@@ -355,8 +216,8 @@ if file_up:
                 x = cell.flatten()[::2]
                 y = cell.flatten()[1::2]
 
-                if (y.max() - y.min()) < size_thres or (x.max() - x.min()) < size_thres:
-                    continue
+                # if (y.max() - y.min()) < size_thres or (x.max() - x.min()) < size_thres:
+                #     continue
 
                 # mask outline
                 mask = np.zeros(tmp_img.shape, dtype=np.uint8)
