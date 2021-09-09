@@ -21,6 +21,11 @@ from tensorflow.image import resize_with_pad
 from tensorflow import expand_dims
 from tensorflow.nn import softmax
 
+from object_detection.utils import label_map_util
+from object_detection.utils import config_util
+from object_detection.utils import visualization_utils as viz_utils
+from object_detection.builders import model_builder
+
 # from streamlit group
 from load_css import local_css
 local_css("style.css")
@@ -153,127 +158,209 @@ if file_up:
     ax.set_title('Selected image')
     st.pyplot(fig)
 
+    if page == 'Thin Smear' | 'Thin Smear | Sample images':
+        flow_threshold = 0.4
+        # flow_threshold = st.slider('Flow threshold (increase -> more cells)', .0, 1.1, 1.0, 0.1)
+        # st.write("", flow_threshold)
 
-    flow_threshold = 0.4
-    # flow_threshold = st.slider('Flow threshold (increase -> more cells)', .0, 1.1, 1.0, 0.1)
-    # st.write("", flow_threshold)
+        cellprob_threshold = 0.0
+        # cellprob_threshold = st.slider('Cell probability threshold (decrease -> more cells)', -6, 6, -4, 1)
+        # st.write("", cellprob_threshold)
 
-    cellprob_threshold = 0.0
-    # cellprob_threshold = st.slider('Cell probability threshold (decrease -> more cells)', -6, 6, -4, 1)
-    # st.write("", cellprob_threshold)
+        color_mask = '#000000'
+        # color_mask = st.color_picker('Pick a color for cell outlines', '#000000')
+        # st.write('The current color is', color_mask)
 
-    color_mask = '#000000'
-    # color_mask = st.color_picker('Pick a color for cell outlines', '#000000')
-    # st.write('The current color is', color_mask)
+        if st.button('Analyze'):
+            #print(x, y, z)
+            # DEFINE CELLPOSE MODEL
+            # model_type='cyto' or model_type='nuclei'
+            with st.spinner("Running segmentation"):
+                model = models.Cellpose(gpu=False, model_type ='cyto')
+                # IF ALL YOUR IMAGES ARE THE SAME TYPE, you can give a list with 2 elements
+                channels = [[0,0]] #* len(files) # IF YOU HAVE GRAYSCALE
 
-    if st.button('Analyze'):
-        #print(x, y, z)
-        # DEFINE CELLPOSE MODEL
-        # model_type='cyto' or model_type='nuclei'
-        with st.spinner("Running segmentation"):
-            model = models.Cellpose(gpu=False, model_type ='cyto')
-            # IF ALL YOUR IMAGES ARE THE SAME TYPE, you can give a list with 2 elements
-            channels = [[0,0]] #* len(files) # IF YOU HAVE GRAYSCALE
-
-            since = time.time()
-            # img = io.imread(filename)
-            masks, flows, styles, diams = run_segmentation(model, image, None, channels, 
-                                                flow_threshold, cellprob_threshold)
-            st.text('Initial cell count: {} '.format(masks.max()))
-            
-            time_elapsed = time.time() - since
-            st.write('Time spent on segmentation {:.0f}m {:.0f}s'.format(
-            time_elapsed // 60, time_elapsed % 60))
-        # if st.button('Show results'):
-            # DISPLAY RESULTS
-            fig = show_cell_outlines(image, masks, color_mask)
-            st.pyplot(fig)
-        with st.spinner("Getting single cells"):
-            outlines_ls = get_cell_outlines(masks)
-
-        
-        with st.spinner("Loading Model"):
-            PATH = 'ensemblemodel_pairD.h5'
-            pair_D_ensemble_model=load_model(PATH)
-            pair_D_ensemble_model.summary()
-            # device = torch.device('cpu')
-            # # Load cnn model
-            # PATH = "model.pth"
-            # model = torch.load(PATH, map_location = device)
-            # model.eval()
-        
-        # size_thres = diameter*0.5
-        tmp_img = image.copy()
-        d_results = {"parasitized": [],
-                    "uninfected": [],
-                    }
-        
-        with st.spinner("Running inference..."):
-        # st.text("Running inference ...")
-            since = time.time()
-            for idx, cell in enumerate(outlines_ls[:]):
+                since = time.time()
+                # img = io.imread(filename)
+                masks, flows, styles, diams = run_segmentation(model, image, None, channels, 
+                                                    flow_threshold, cellprob_threshold)
+                st.text('Initial cell count: {} '.format(masks.max()))
                 
-                x = cell.flatten()[::2]
-                y = cell.flatten()[1::2]
+                time_elapsed = time.time() - since
+                st.write('Time spent on segmentation {:.0f}m {:.0f}s'.format(
+                time_elapsed // 60, time_elapsed % 60))
+            # if st.button('Show results'):
+                # DISPLAY RESULTS
+                fig = show_cell_outlines(image, masks, color_mask)
+                st.pyplot(fig)
+            with st.spinner("Getting single cells"):
+                outlines_ls = get_cell_outlines(masks)
 
-                # if (y.max() - y.min()) < size_thres or (x.max() - x.min()) < size_thres:
-                #     continue
+            
+            with st.spinner("Loading Model"):
+                PATH = 'ensemblemodel_pairD.h5'
+                pair_D_ensemble_model=load_model(PATH)
+                pair_D_ensemble_model.summary()
+                # device = torch.device('cpu')
+                # # Load cnn model
+                # PATH = "model.pth"
+                # model = torch.load(PATH, map_location = device)
+                # model.eval()
+            
+            # size_thres = diameter*0.5
+            tmp_img = image.copy()
+            d_results = {"parasitized": [],
+                        "uninfected": [],
+                        }
+            
+            with st.spinner("Running inference..."):
+            # st.text("Running inference ...")
+                since = time.time()
+                for idx, cell in enumerate(outlines_ls[:]):
+                    
+                    x = cell.flatten()[::2]
+                    y = cell.flatten()[1::2]
 
-                # mask outline
-                mask = np.zeros(tmp_img.shape, dtype=np.uint8)
-                channel_count = tmp_img.shape[2]  # i.e. 3 or 4 depending on your image
-                ignore_mask_color = (255,)*channel_count
-                # fill contour
-                cv2.fillConvexPoly(mask, cell, ignore_mask_color)
-                # extract roi
-                masked_image = cv2.bitwise_and(tmp_img, mask)
-                # crop the box around the cell
-                (topy, topx) = (np.min(y), np.min(x))
-                (bottomy, bottomx) = (np.max(y), np.max(x))
-                out = masked_image[topy:bottomy+1, topx:bottomx+1,:]
-                # predict the stage of the cell p
-                stage = get_prediction_tf(out)
-                d_results[stage].append(idx)
-  
-        time_elapsed = time.time() - since
-        st.write('time spent on classification {:.0f}m {:.0f}s'.format(
-        time_elapsed // 60, time_elapsed % 60))
+                    # if (y.max() - y.min()) < size_thres or (x.max() - x.min()) < size_thres:
+                    #     continue
+
+                    # mask outline
+                    mask = np.zeros(tmp_img.shape, dtype=np.uint8)
+                    channel_count = tmp_img.shape[2]  # i.e. 3 or 4 depending on your image
+                    ignore_mask_color = (255,)*channel_count
+                    # fill contour
+                    cv2.fillConvexPoly(mask, cell, ignore_mask_color)
+                    # extract roi
+                    masked_image = cv2.bitwise_and(tmp_img, mask)
+                    # crop the box around the cell
+                    (topy, topx) = (np.min(y), np.min(x))
+                    (bottomy, bottomx) = (np.max(y), np.max(x))
+                    out = masked_image[topy:bottomy+1, topx:bottomx+1,:]
+                    # predict the stage of the cell p
+                    stage = get_prediction_tf(out)
+                    d_results[stage].append(idx)
+    
+            time_elapsed = time.time() - since
+            st.write('time spent on classification {:.0f}m {:.0f}s'.format(
+            time_elapsed // 60, time_elapsed % 60))
 
 
-        with st.spinner("Plotting results"):
-            t = "<div> <span class='highlight darkgreen'> Uninfected </span> \
-            <span class='highlight red'> Parasitized </span>"
-            st.markdown(t, unsafe_allow_html=True)
+            with st.spinner("Plotting results"):
+                t = "<div> <span class='highlight darkgreen'> Uninfected </span> \
+                <span class='highlight red'> Parasitized </span>"
+                st.markdown(t, unsafe_allow_html=True)
 
-            colors_stage = { "parasitized": "#FF0000", "uninfected": '#458B00'}
-            fig, ax = plt.subplots(figsize = (8,8))
-            # yellow: ring; magenta: troph; cyan: shiz
-            ax.imshow(image)
+                colors_stage = { "parasitized": "#FF0000", "uninfected": '#458B00'}
+                fig, ax = plt.subplots(figsize = (8,8))
+                # yellow: ring; magenta: troph; cyan: shiz
+                ax.imshow(image)
 
-            for k in class_names:
-                # if k!= 'uninfected' and len(d_results[k]) > 0:
-                if len(d_results[k]) > 0:
-                    for cell in d_results[k]:
-                        coord = outlines_ls[cell]
-                        ax.plot(coord[:,0], coord[:,1], c = colors_stage[k], lw=1)
-            ax.set_title('Predicted infected cells')
-            ax.axis('off')
-            st.pyplot(fig)
+                for k in class_names:
+                    # if k!= 'uninfected' and len(d_results[k]) > 0:
+                    if len(d_results[k]) > 0:
+                        for cell in d_results[k]:
+                            coord = outlines_ls[cell]
+                            ax.plot(coord[:,0], coord[:,1], c = colors_stage[k], lw=1)
+                ax.set_title('Predicted infected cells')
+                ax.axis('off')
+                st.pyplot(fig)
 
-            total_count = sum(len(v)for v in d_results.values())
-            st.write("Final cell count", total_count)
-            out_stat = []
-            for key in class_names:
-                stage_count = len(d_results[key])
-                # st.write(key, stage_count, round(stage_count/total_count, 3))
-                paras = round(stage_count/total_count, 3)
-                out_stat.append((stage_count, paras))
-            par = (out_stat[0][1])*100
-            st.write("Parasitemia (%)", round(par, 2) )
-            st.markdown(f"""
-                | Stage       |      Count         |       %             |
-                | ------------| -------------      | ----------          |
-                | Parasitized | {out_stat[0][0]}   |  {out_stat[0][1]}   | 
-                | Uninfected  | {out_stat[1][0]}   |  {out_stat[1][1]}   |
+                total_count = sum(len(v)for v in d_results.values())
+                st.write("Final cell count", total_count)
+                out_stat = []
+                for key in class_names:
+                    stage_count = len(d_results[key])
+                    # st.write(key, stage_count, round(stage_count/total_count, 3))
+                    paras = round(stage_count/total_count, 3)
+                    out_stat.append((stage_count, paras))
+                par = (out_stat[0][1])*100
+                st.write("Parasitemia (%)", round(par, 2) )
+                st.markdown(f"""
+                    | Stage       |      Count         |       %             |
+                    | ------------| -------------      | ----------          |
+                    | Parasitized | {out_stat[0][0]}   |  {out_stat[0][1]}   | 
+                    | Uninfected  | {out_stat[1][0]}   |  {out_stat[1][1]}   |
 
-            """)
+                """)
+                
+    if page == 'Thick Smear':
+        
+        st.write('Loading model... ', end='')
+        start_time = time.time()
+
+        # Load pipeline config and build a detection model
+        configs = config_util.get_configs_from_pipeline_file(PATH_TO_CFG)
+        model_config = configs['model']
+        detection_model = model_builder.build(model_config=model_config, is_training=False)
+
+        # Restore checkpoint
+        ckpt = tf.compat.v2.train.Checkpoint(model=detection_model)
+        ckpt.restore(os.path.join(PATH_TO_CKPT, 'ckpt-11')).expect_partial()
+
+        @tf.function
+        def detect_fn(image):
+            """Detect objects in image."""
+
+            image, shapes = detection_model.preprocess(image)
+            prediction_dict = detection_model.predict(image, shapes)
+            detections = detection_model.postprocess(prediction_dict, shapes)
+
+            return detections
+
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        st.write('Done! Took {} seconds'.format(elapsed_time))
+        
+        category_index = label_map_util.create_category_index_from_labelmap(PATH_TO_LABELS,
+                                                                    use_display_name=True)
+        
+
+
+        for image_path in IMAGE_PATHS:
+
+            print('Running inference for {}... '.format(image_path), end='')
+
+            image_np = load_image_into_numpy_array(image_path)
+
+            # Things to try:
+            # Flip horizontally
+            # image_np = np.fliplr(image_np).copy()
+
+            # Convert image to grayscale
+            # image_np = np.tile(
+            #     np.mean(image_np, 2, keepdims=True), (1, 1, 3)).astype(np.uint8)
+
+            input_tensor = tf.convert_to_tensor(np.expand_dims(image_np, 0), dtype=tf.float32)
+
+            detections = detect_fn(input_tensor)
+
+            # All outputs are batches tensors.
+            # Convert to numpy arrays, and take index [0] to remove the batch dimension.
+            # We're only interested in the first num_detections.
+            num_detections = int(detections.pop('num_detections'))
+            detections = {key: value[0, :num_detections].numpy()
+                        for key, value in detections.items()}
+
+            detections['num_detections'] = num_detections
+
+            # detection_classes should be ints.
+            detections['detection_classes'] = detections['detection_classes'].astype(np.int64)
+
+            label_id_offset = 1
+            image_np_with_detections = image_np.copy()
+
+            viz_utils.visualize_boxes_and_labels_on_image_array(
+                    image_np_with_detections,
+                    detections['detection_boxes'],
+                    detections['detection_classes']+label_id_offset,
+                    detections['detection_scores'],
+                    category_index,
+                    use_normalized_coordinates=True,
+                    max_boxes_to_draw=200,
+                    min_score_thresh=.2,
+                    agnostic_mode=False)
+
+            plt.figure(figsize=(20,20))
+            plt.imshow(image_np_with_detections)
+            print('Done')
+        plt.show()
