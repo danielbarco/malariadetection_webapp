@@ -11,7 +11,7 @@ import json
 import requests
 import io
 from os import listdir
-from os.path import isfile, join
+from os.path import isfile, join, splitext
 
 import matplotlib.pyplot as plt
 
@@ -36,7 +36,7 @@ local_css("style.css")
 from skimage.util import img_as_ubyte
 
 def imread(image_up):
-    ext = path.splitext(image_up.name)[-1]
+    ext = splitext(image_up.name)[-1]
     if ext== '.tif' or ext=='tiff':
         img = tifffile.imread(image_up)
         return img
@@ -132,7 +132,7 @@ st.sidebar.info(" - Segmentation: [Cellpose] (https://github.com/MouseLand/cellp
 file_up = None
 
 if page == 'Thin Smear | Sample images':
-    img_list = [join('images_thick', f) for f in listdir('images_thin') if isfile(join('images_thin', f))]
+    img_list = [join('images_thin', f) for f in listdir('images_thin') if isfile(join('images_thin', f))]
     img_captions = ["After 2 hours", "After 14 hours", "After 38 hours", "After 48 hours", " 👉 Choose an image here 👈"]
     st.image(img_list, caption = img_captions[:-1], width = int(698/2))
     selected_image = st.selectbox("Choose a sample image to analyze", img_captions, (len(img_captions)-1))
@@ -141,7 +141,7 @@ if page == 'Thin Smear | Sample images':
         file_up = img_list[selected_image]
         image = tifffile.imread(file_up)
         
-if page == 'Thick Smear | Sample images':
+elif page == 'Thick Smear | Sample images':
     img_list = [join('images_thick', f) for f in listdir('images_thick') if isfile(join('images_thick', f))]
     img_captions = ["image 1", "image 2", "image 3", "image 4", " 👉 Choose an image here 👈"]
     st.image(img_list, caption = img_captions[:-1], width = int(698/2))
@@ -154,7 +154,7 @@ if page == 'Thick Smear | Sample images':
         image = img_as_ubyte(img)
         
 else:
-    file_up = st.file_uploader("Upload an image", type=["tif", "tiff", "png", "jpg", "jpeg"])
+    file_up = st.file_uploader("Upload an image", type=["tif", "tiff", "png", "jpg", "jpeg"]) #,  accept_multiple_files= True)
     if file_up:
         image = imread(file_up)
 
@@ -217,9 +217,6 @@ if file_up:
                 
                 x = cell.flatten()[::2]
                 y = cell.flatten()[1::2]
-
-                # if (y.max() - y.min()) < size_thres or (x.max() - x.min()) < size_thres:
-                #     continue
 
                 # mask outline
                 mask = np.zeros(tmp_img.shape, dtype=np.uint8)
