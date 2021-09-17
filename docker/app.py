@@ -15,7 +15,7 @@ from os.path import isfile, join, splitext
 
 import matplotlib.pyplot as plt
 
-# import torch
+import torch
 import torchvision.transforms as transforms
 
 from tensorflow.keras.models import load_model
@@ -176,7 +176,7 @@ if file_up:
         # if st.button('Analyze'):
 
         with st.spinner("Running segmentation"):
-            model = models.Cellpose(gpu=False, model_type ='cyto')
+            model = models.Cellpose(gpu=True, model_type ='cyto')
             # IF ALL YOUR IMAGES ARE THE SAME TYPE, you can give a list with 2 elements
             channels = [[0,0]] #* len(files) # IF YOU HAVE GRAYSCALE
 
