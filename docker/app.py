@@ -110,7 +110,7 @@ def get_prediction_tf(arr):
     '''function for tf model; resizes and pads an image array and then returns the prediction i.e. the most likely class'''
     arr = resize_with_pad(arr, 100, 100, method= 'bilinear', antialias=False)
     arr = expand_dims(arr, 0) # Create a batch
-    predictions = pair_D_ensemble_model.predict(arr)
+    predictions = custom_model.predict(arr)
     score = softmax(predictions[0])
     #print(class_names[np.argmax(score)])
     return class_names[np.argmax(score)]
@@ -197,8 +197,8 @@ if file_up:
         
         with st.spinner("Loading Model"):
             PATH = 'ensemblemodel_pairD.h5'
-            pair_D_ensemble_model=load_model(PATH)
-            pair_D_ensemble_model.summary()
+            custom_model=load_model(PATH)
+            custom_model.summary()
             # device = torch.device('cpu')
             # # Load cnn model
             # PATH = "model.pth"
