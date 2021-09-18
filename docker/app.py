@@ -134,17 +134,18 @@ file_up = None
 if page == 'Thin Smear | Sample images':
     img_list = [join('images_thin', f) for f in listdir('images_thin') if isfile(join('images_thin', f))]
     img_captions = ["After 2 hours", "After 14 hours", "After 38 hours", "After 48 hours", " 👉 Choose an image here 👈"]
-    st.image(img_list, caption = img_captions[:-1], width = int(698/2))
     selected_image = st.selectbox("Choose a sample image to analyze", img_captions, (len(img_captions)-1))
     if selected_image != " 👉 Choose an image here 👈":
         selected_image = img_captions.index(selected_image)
         file_up = img_list[selected_image]
         image = tifffile.imread(file_up)
+    if not file_up:
+        st.image(img_list, caption = img_captions[:-1], width = int(698/2))
+
         
 elif page == 'Thick Smear | Sample images':
     img_list = [join('images_thick', f) for f in listdir('images_thick') if isfile(join('images_thick', f))]
     img_captions = ["image 1", "image 2", "image 3", "image 4", " 👉 Choose an image here 👈"]
-    st.image(img_list, caption = img_captions[:-1], width = int(698/2))
     selected_image = st.selectbox("Choose a sample image to analyze", img_captions, (len(img_captions)-1))
     if selected_image != " 👉 Choose an image here 👈":
         selected_image = img_captions.index(selected_image)
@@ -152,7 +153,9 @@ elif page == 'Thick Smear | Sample images':
         st.text(file_up) 
         img = plt.imread(file_up)
         image = img_as_ubyte(img)
-        
+    if not file_up:
+        st.image(img_list, caption = img_captions[:-1], width = int(698/2))
+       
 else:
     file_up = st.file_uploader("Upload an image", type=["tif", "tiff", "png", "jpg", "jpeg"]) #,  accept_multiple_files= True)
     if file_up:
@@ -175,7 +178,7 @@ if file_up:
 
         # if st.button('Analyze'):
 
-        with st.spinner("Running segmentation"):
+        with st.spinner("Please wait, cell detection in progress"):
             model = models.Cellpose(gpu=True, model_type ='cyto')
             # IF ALL YOUR IMAGES ARE THE SAME TYPE, you can give a list with 2 elements
             channels = [[0,0]] #* len(files) # IF YOU HAVE GRAYSCALE
@@ -199,7 +202,7 @@ if file_up:
             PATH = 'ensemblemodel_pairD.h5'
             custom_model=load_model(PATH)
             custom_model.summary()
-            # device = torch.device('cpu')
+            # device = torch.device('gpu')
             # # Load cnn model
             # PATH = "model.pth"
             # model = torch.load(PATH, map_location = device)
@@ -211,7 +214,7 @@ if file_up:
                     "uninfected": [],
                     }
         
-        with st.spinner("Detecting parasites..."):
+        with st.spinner("Searching for parasites"):
             since = time.time()
             for idx, cell in enumerate(outlines_ls[:]):
                 
@@ -299,7 +302,7 @@ if file_up:
 
             return detections
 
-        with st.spinner("Detecting parasites..."):
+        with st.spinner("Searching for parasites"):
             category_index = label_map_util.create_category_index_from_labelmap('class_labels_malaria.pbtxt',
                                                                         use_display_name=True)
 
