@@ -6,8 +6,13 @@ from object_detection.builders import model_builder
 import itertools
 import cv2
 
-def faster_rcnn(img_np, path_cfg, path_ckpt): 
-
+def object_detection(img_np, path_cfg, path_ckpt): 
+    '''Predicts object detection on image
+    Args:
+        img_np (np.array): image 1024 x 1024 with white blood cell diameter of 
+        path_cfg (str): path to tf object detection model config file
+        path_ckpt (str): path to tf checkpoint'''
+        
     # Load pipeline config and build a detection model
     configs = config_util.get_configs_from_pipeline_file(path_cfg)
     model_config = configs['model']
@@ -85,10 +90,13 @@ def calc_iou_individual(pred_box, gt_box):
 
 def cut_patches(detections, img_full, model_score_thr = 0.0, input_img_size = 1024, out_img_size = 256):
     '''Takes tf objecdetection scores and boxes and cuts the patches from the full image.
-    This allows for higher resolution patches
-    input:  detections (tf obect detections output)
-    output: list of potentally infected patches'''
-    
+    This allows for higher resolution patches.
+    Args:
+        detections (dictionary): tf obect detections output
+        img_full (numpy array): image object as numpy array
+    Returns:
+        patches_resized (list): list of potentally infected patches'''
+
     # sort detections_scores & detection_boxes
     arg_sort = np.argsort(detections['detection_scores'])
     detections['detection_scores'] = np.array(detections['detection_scores'])[arg_sort]
