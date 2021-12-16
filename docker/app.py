@@ -25,6 +25,8 @@ from object_detection.utils import label_map_util
 from object_detection.utils import config_util
 from object_detection.utils import visualization_utils as viz_utils
 from object_detection.builders import model_builder
+import preprocess
+import prediction
 
 # from streamlit group
 from load_css import local_css
@@ -92,23 +94,18 @@ st.title('Malaria Detection')
 
 page = st.sidebar.selectbox("Choose slide type", ('Thick Smear', 'Thick Smear | Sample images'))
 
-radius = st.sidebar.slider('How large is a White Blood Cell', 0, 50, 18)
-
 st.sidebar.title("About")
-st.sidebar.info(" - Segmentation: [Cellpose] (https://github.com/MouseLand/cellpose)    \n \
-- Classification Thin: SqueezeNet + VGG19 [Article] (https://peerj.com/articles/6977.pdf) [GitHub] (https://github.com/sivaramakrishnan-rajaraman/Deep-Neural-Ensembles-toward-Malaria-Parasite-Detection-in-Thin-Blood-Smear-Images)     \n \
-- Classification Thick: Centernet Hourglass [GitHub] (https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/tf2_detection_zoo.md) \n \
-- Trained on Giemsa stained P. _falsiparum_  [NIH Data] (https://lhncbc.nlm.nih.gov/LHC-downloads/downloads.html)   \n \
-- Powered by PyTorch, TensorFlow [Streamlit] (https://docs.streamlit.io/en/stable/api.html) ")
+st.sidebar.info("- Trained on Giemsa stained _plasmodia falsiparum & vivax_  [NIH Data] (https://data.lhncbc.nlm.nih.gov/public/Malaria/index.html)   \n \
+- Powered by TensorFlow and [Streamlit] (https://docs.streamlit.io/en/stable/api.html) ")
 
 
-
-file_up = None
+file_up = None  
 
         
 if page == 'Thick Smear | Sample images':
     img_list = [join('images_thick', f) for f in listdir('images_thick') if isfile(join('images_thick', f))]
-    img_captions = ["image 1", "image 2", "image 3", "image 4", " 👉 Choose an image here 👈"]
+    img_captions = [f for f in listdir('images_thick') if isfile(join('images_thick', f))]
+    img_captions.append(" 👉 Choose an image here 👈")
     selected_image = st.selectbox("Choose a sample image to analyze", img_captions, (len(img_captions)-1))
     if selected_image != " 👉 Choose an image here 👈":
         selected_image = img_captions.index(selected_image)
@@ -125,15 +122,62 @@ else:
         image = imread(file_up)
 
 if file_up:
-
+    calc_radius = preprocess.calculate_WBC_radius(image)
+    radius = st.sidebar.slider('How large is a white blood cell ?', 10, 50, calc_radius)
     fig, ax = plt.subplots(figsize = (8,8))
     ax.imshow(image)
-    circ = Circle((radius*2,radius*2),radius, color = '#f63366')
+    circ = Circle((radius*2,radius*2), radius, color = '#f63366')
     ax.add_patch(circ)
     ax.axis("off")
     ax.set_title('Selected image')
     st.pyplot(fig)
 
+    with st.spinner("Detecting potential parasites"):
+        dict_ckpt_cfg = {'models/fasterrcnn_inception_v2_1024_PF_train150000/ckpt-151':
+                        'models/fasterrcnn_inception_v2_1024_PF_train150000/thick_PF_wh64.config'}
+
+        path_label = 'models/class_labels_malaria_1class.pbtxt'
+
+        for path_ckpt,path_cfg in dict_ckpt_cfg.items():
+            start_time = time.time()
+            detections = prediction.faster_rcnn(image, path_cfg, path_ckpt)
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            st.text(f'Took {elapsed_time} seconds') 
+
+            threshold = 0.05
+
+            label_id_offset = 1
+            image_np_with_detections = image.copy()
+
+            category_index = label_map_util.create_category_index_from_labelmap(path_label,
+                                                                        use_display_name=True)
+
+            viz_utils.visualize_boxes_and_labels_on_image_array(
+                    image_np_with_detections,
+                    detections['detection_boxes'],
+                    detections['detection_classes']+label_id_offset,
+                    detections['detection_scores'],
+                    category_index,
+                    use_normalized_coordinates=True,
+                    max_boxes_to_draw=400,
+                    min_score_thresh= threshold,
+                    agnostic_mode=False)
+
+
+            data = Image.fromarray(image_np_with_detections)
+
+            fig, ax = plt.subplots(figsize = (8,8))
+            ax.imshow(image_np_with_detections)
+            ax.axis("off")
+            ax.set_title('Faster RCNN predictions')
+            st.pyplot(fig)
+
+
+
+    # start_time = time.time()
+    # end_time = time.time()
+    # elapsed_time = end_time - start_time
 
 
         
