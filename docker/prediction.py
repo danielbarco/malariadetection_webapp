@@ -1,8 +1,12 @@
 import numpy as np
 import tensorflow as tf
-from object_detection.utils import label_map_util
 from object_detection.utils import config_util
 from object_detection.builders import model_builder
+from tensorflow.keras.models import load_model
+
+from tensorflow import expand_dims
+from tensorflow.nn import softmax
+
 import itertools
 import cv2
 
@@ -11,8 +15,10 @@ def object_detection(img_np, path_cfg, path_ckpt):
     Args:
         img_np (np.array): image 1024 x 1024 with white blood cell diameter of 
         path_cfg (str): path to tf object detection model config file
-        path_ckpt (str): path to tf checkpoint'''
-        
+        path_ckpt (str): path to tf checkpoint
+    Returns:
+        detections (dictionary): tf obect detections output'''
+
     # Load pipeline config and build a detection model
     configs = config_util.get_configs_from_pipeline_file(path_cfg)
     model_config = configs['model']
@@ -22,7 +28,7 @@ def object_detection(img_np, path_cfg, path_ckpt):
     ckpt = tf.compat.v2.train.Checkpoint(model=detection_model)
     ckpt.restore(path_ckpt).expect_partial()
 
-    @tf.function
+    # @tf.function
     def detect_fn(img):
         """Detect objects in img."""
 
@@ -118,21 +124,45 @@ def cut_patches(detections, img_full, model_score_thr = 0.0, input_img_size = 10
 #     product_boxes = list(itertools.product(detection_boxes, detection_boxes))
 #     detection_boxes_cleaned = [product[0] for product in product_boxes if calc_iou_individual(product[0], product[1]) < 0.1]
 #     print(len(detection_boxes_cleaned))
-
     
     patches_resized = []
-    ''' image[start_row:end_row, start_column:end_column] e.g. image[30:250, 100:230] or [x1:x2, y1:y2]
-    You can see that the waterfall goes vertically starting at about 30px and ending at around 250px.
-    You can see that the waterfall goes horizontally from around 100px to around 230px. 
-                '''
+    
+    # image[start_row:end_row, start_column:end_column] e.g. image[30:250, 100:230] or [x1:x2, y1:y2]
     for bbx in tf_detections:
-
         patch = img_full[int(bbx[3] * width_scale):int(bbx[1] * width_scale),
                     int(bbx[2] * height_scale):int(bbx[0] * height_scale)]
-
-
         patch_resized = cv2.resize(patch, (out_img_size, out_img_size), interpolation = cv2.INTER_CUBIC)
         patches_resized.append(patch_resized)
 
-
     return patches_resized
+
+
+def tf_classification(patches, model_path):
+    '''function for tf model; resizes and pads an image array and then returns the prediction i.e. the most likely class
+    Args:
+        patches (list): list of image object as numpy array
+    Returns:
+        y_pred (list): list of most probable class'''
+
+    custom_model = load_model(model_path)
+    y_pred = []
+    for patch in patches:
+        patch = expand_dims(patch, 0) # Create a batch
+        predictions = custom_model.predict(patch)
+        score = softmax(predictions[0])
+        y_pred.append(np.argmax(score))
+    return y_pred
+
+def main(img_np, img_full):
+    # falciparum
+    pf_path_cfg = '../object_detection/workspace/pretrained_models/faster_rcnn_inception_resnet_v2_1024x1024_coco17_tpu-8/thick_PF_wh64.config'
+    pf_path_ckpt = '../object_detection/workspace/models/fasterrcnn_inception_v2_1024_PF_train150000/ckpt-151'
+    pf_model_path = ''
+    detections = object_detection(img_np, pf_path_cfg, pf_path_ckpt)
+    pf_patches_resized = cut_patches(detections, img_full, model_score_thr = 0.0, input_img_size = 1024, out_img_size = 256)
+    y_pred = tf_classification(pf_patches_resized, pf_model_path)
+    pf_patches_selected = [patch for patch, label in zip(pf_patches_resized, y_pred) if label == 1]
+    
+    
+    y_pred = tf_classification(patches_resized, model_path)   
+    
