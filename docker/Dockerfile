@@ -38,13 +38,14 @@ RUN pip install protobuf==3.13.0
 # cellpose requires large models, load these from cache with:
 # RUN python -c 'from cellpose import models'
 
-COPY models models
-COPY style.css .
-COPY images_thick images_thick
-# COPY images_thin images_thin
-COPY load_css.py .
-COPY preprocess.py .
-COPY prediction.py .
-COPY app.py .
+# COPY models models
+# COPY style.css .
+# COPY images_thick images_thick
+# # COPY images_thin images_thin
+# COPY load_css.py .
+# COPY preprocess.py .
+# COPY prediction.py .
+# COPY app.py .
+WORKDIR docker/
 ENTRYPOINT ["streamlit","run"]
 CMD ["app.py"]

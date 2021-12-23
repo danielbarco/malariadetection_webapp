@@ -1,24 +1,22 @@
 import numpy as np
+import pandas as pd
 import tensorflow as tf
-from object_detection.utils import config_util
-from object_detection.builders import model_builder
 from tensorflow.keras.models import load_model
 
 from tensorflow import expand_dims
 from tensorflow.nn import softmax
 
-import itertools
+from object_detection.utils import config_util
+from object_detection.builders import model_builder
+
+import time
+from PIL import Image
+from six import BytesIO
 import cv2
+import os
 
-def object_detection(img_np, path_cfg, path_ckpt): 
-    '''Predicts object detection on image
-    Args:
-        img_np (np.array): image 1024 x 1024 with white blood cell diameter of 
-        path_cfg (str): path to tf object detection model config file
-        path_ckpt (str): path to tf checkpoint
-    Returns:
-        detections (dictionary): tf obect detections output'''
 
+def initiate_detection_model(path_cfg, path_ckpt):
     # Load pipeline config and build a detection model
     configs = config_util.get_configs_from_pipeline_file(path_cfg)
     model_config = configs['model']
@@ -27,22 +25,113 @@ def object_detection(img_np, path_cfg, path_ckpt):
     # Restore checkpoint
     ckpt = tf.compat.v2.train.Checkpoint(model=detection_model)
     ckpt.restore(path_ckpt).expect_partial()
+    return detection_model
 
-    # @tf.function
-    def detect_fn(img):
-        """Detect objects in img."""
+def initiate_classification_model(model_path):
+    classification_model = load_model(model_path)
+    return classification_model
 
-        img, shapes = detection_model.preprocess(img)
-        prediction_dict = detection_model.predict(img, shapes)
-        detections = detection_model.postprocess(prediction_dict, shapes)
+crop_size = 1024
 
-        return detections
+pf_path_cfg = '../object_detection/workspace/pretrained_models/faster_rcnn_inception_resnet_v2_1024x1024_coco17_tpu-8/thick_PF_wh64.config'
+pf_path_ckpt = '../object_detection/workspace/models/fasterrcnn_inception_v2_1024_PF_train150000/ckpt-151'
+pf_model_path = '../data/weights/PF_256_resnet50_custom.h5'
+pf_classification_model = initiate_classification_model(pf_model_path)
+pf_detection_model = initiate_detection_model(pf_path_cfg, pf_path_ckpt)
+
+@tf.function
+def pf_detection_model_fn(image):
+    """Detect objects in image."""
+
+    image, shapes = pf_detection_model.preprocess(image)
+    prediction_dict = pf_detection_model.predict(image, shapes)
+    detections = pf_detection_model.postprocess(prediction_dict, shapes)
+
+    return detections
+
+pv_path_cfg = '../object_detection/workspace/pretrained_models/faster_rcnn_inception_resnet_v2_1024x1024_coco17_tpu-8/thick_PV_wh64.config'
+pv_path_ckpt = '../object_detection/workspace/models/fasterrcnn_inception_v2_1024_PV_train150000/ckpt-151'
+pv_model_path = '../data/weights/PV_256_resnet50_custom.h5'
+pv_classification_model = initiate_classification_model(pv_model_path)
+pv_detection_model = initiate_detection_model(pv_path_cfg, pv_path_ckpt)
+
+@tf.function
+def pv_detection_model_fn(image):
+    """Detect objects in image."""
+
+    image, shapes = pv_detection_model.preprocess(image)
+    prediction_dict = pv_detection_model.predict(image, shapes)
+    detections = pv_detection_model.postprocess(prediction_dict, shapes)
+
+    return detections
+
+
+pvf_model_path = '../data/weights/PVF_256_resnet50_custom.h5'
+pvf_classification_model = initiate_classification_model(pvf_model_path)
+
+# logging
+filename = "../data/logs/logs.csv"
+os.makedirs(os.path.dirname(filename), exist_ok=True)
+if not os.path.isfile(filename):
+    df_logs = pd.DataFrame(columns = ['patient_n', 'img', 'model_score_thr', \
+                'PV_detected', 'PV_selected', 'PV_prob' ,\
+                'PF_detected', 'PF_selected', 'PF_prob', 'dataset', 'result'])
+    df_logs.to_csv(filename, index=False)
+
+
+
+def load_image_into_numpy_array(path):
+    """Load an image from file into a numpy array.
+
+    Puts image into numpy array to feed into tensorflow graph.
+    Note that by convention we put it into a numpy array with shape
+    (height, width, channels), where channels=3 for RGB.
+
+    Args:
+    path: the file path to the image
+
+    Returns:
+    uint8 numpy array with shape (img_height, img_width, 3)
+    """
+    img_data = tf.io.gfile.GFile(path, 'rb').read()
+    image = Image.open(BytesIO(img_data))
+    (im_width, im_height) = image.size
+    return np.array(image.getdata()).reshape(
+      (im_height, im_width, 3)).astype(np.uint8)
+
+
+def get_model_detection_function(model):
+    """Get a tf.function for detection."""
+
+    @tf.function
+    def detect_fn(image):
+        """Detect objects in image."""
+
+        image, shapes = model.preprocess(image)
+        prediction_dict = model.predict(image, shapes)
+        detections = model.postprocess(prediction_dict, shapes)
+
+        return detections#, prediction_dict, tf.reshape(shapes, [-1])
+
+    return detect_fn
+
+
+
+def object_detection(img_np, detection_model_fn): 
+    '''Predicts object detection on image
+    Args:
+        img_np (np.array): image 1024 x 1024 with white blood cell diameter of 
+        path_cfg (str): path to tf object detection model config file
+        path_ckpt (str): path to tf checkpoint
+    Returns:
+        detections (dictionary): tf obect detections output'''
+
 
 
     input_tensor = tf.convert_to_tensor(np.expand_dims(img_np, 0), dtype=tf.float32)
 
-    detections_raw = detect_fn(input_tensor)
-
+    detections_raw = detection_model_fn(input_tensor)
+    
     # All outputs are batches tensors.
     # Convert to numpy arrays, and take index [0] to remove the batch dimension.
     # We're only interested in the first num_detections.
@@ -51,8 +140,6 @@ def object_detection(img_np, path_cfg, path_ckpt):
 
     detections = {key: value[0, :num_detections].numpy()
                 for key, value in detections_raw.items()}
-
-    detections['num_detections'] = num_detections
 
     # detection_classes should be ints.
     detections['detection_classes'] = detections['detection_classes'].astype(np.int64)
@@ -131,38 +218,155 @@ def cut_patches(detections, img_full, model_score_thr = 0.0, input_img_size = 10
     for bbx in tf_detections:
         patch = img_full[int(bbx[3] * width_scale):int(bbx[1] * width_scale),
                     int(bbx[2] * height_scale):int(bbx[0] * height_scale)]
-        patch_resized = cv2.resize(patch, (out_img_size, out_img_size), interpolation = cv2.INTER_CUBIC)
-        patches_resized.append(patch_resized)
+        if len(patch) != 0 and len(patch.shape) == 3 and patch.shape[0] > 2 and patch.shape[1] > 2:
+            # patch_resized = cv2.resize(patch, (out_img_size, out_img_size), interpolation = cv2.INTER_CUBIC)
+            patch_resized = tf.image.resize(patch, [out_img_size, out_img_size])
+            patches_resized.append(patch_resized)
 
     return patches_resized
 
 
-def tf_classification(patches, model_path):
+def tf_classification(patches, model):
     '''function for tf model; resizes and pads an image array and then returns the prediction i.e. the most likely class
     Args:
         patches (list): list of image object as numpy array
     Returns:
         y_pred (list): list of most probable class'''
+    
+    return model.predict(np.array(patches))
 
-    custom_model = load_model(model_path)
-    y_pred = []
-    for patch in patches:
-        patch = expand_dims(patch, 0) # Create a batch
-        predictions = custom_model.predict(patch)
-        score = softmax(predictions[0])
-        y_pred.append(np.argmax(score))
-    return y_pred
 
-def main(img_np, img_full):
-    # falciparum
-    pf_path_cfg = '../object_detection/workspace/pretrained_models/faster_rcnn_inception_resnet_v2_1024x1024_coco17_tpu-8/thick_PF_wh64.config'
-    pf_path_ckpt = '../object_detection/workspace/models/fasterrcnn_inception_v2_1024_PF_train150000/ckpt-151'
-    pf_model_path = ''
-    detections = object_detection(img_np, pf_path_cfg, pf_path_ckpt)
-    pf_patches_resized = cut_patches(detections, img_full, model_score_thr = 0.0, input_img_size = 1024, out_img_size = 256)
-    y_pred = tf_classification(pf_patches_resized, pf_model_path)
-    pf_patches_selected = [patch for patch, label in zip(pf_patches_resized, y_pred) if label == 1]
+def patient_eval(img_paths, img_full_paths, patient_n = -1, model_score_thr = 0.0, dataset = None, verbose = False):
+    total_pf = []
+    total_pv = []
+    total_u = []
+    df_logs = pd.read_csv(filename)
+    total_start_time = time.time()
+
+    for img_path, img_full_path in zip(img_paths, img_full_paths):
+        
+        #load images
+        img_np_bgr = cv2.imread(img_path, flags=cv2.IMREAD_IGNORE_ORIENTATION|cv2.IMREAD_COLOR)   
+        img_full_bgr = cv2.imread(img_full_path, flags=cv2.IMREAD_IGNORE_ORIENTATION|cv2.IMREAD_COLOR) 
+        img_np = img_np_bgr[...,::-1]
+        img_full = img_full_bgr[...,::-1]
+
+        # Falciparum object detection & filter with ResNet50
+        start_time = time.time()
+        detections = object_detection(img_np, pf_detection_model_fn)
+        if verbose:
+            duration = time.time() - start_time
+            print(f'PF detection took {round(duration, 2)} seconds')
+
+        pf_patches_resized = cut_patches(detections, img_full, model_score_thr = model_score_thr , input_img_size = 1024, out_img_size = 256)
+        start_time = time.time()
+        if len(pf_patches_resized) > 0:
+            y_pred = tf_classification(pf_patches_resized, pf_classification_model)
+            pf_patches_selected = [patch for patch, label in zip(pf_patches_resized, y_pred) if np.argmax(softmax(label)) == 1]
+        else:
+            pf_patches_selected = []    
+        
+        if verbose:
+            duration = time.time() - start_time
+            print(f'PF ResNet50 took {round(duration, 2)} seconds')
+
+        # Vivax object detection & filter with ResNet50
+        start_time = time.time()
+        detections = object_detection(img_np, pv_detection_model_fn)
+        if verbose:
+            duration= time.time() - start_time   
+            print(f'PV detection took {round(duration, 2)} seconds')
+
+        pv_patches_resized = cut_patches(detections, img_full, model_score_thr = model_score_thr, input_img_size = 1024, out_img_size = 256)
+        start_time = time.time()
+        if len(pv_patches_resized) > 0:
+            y_pred = tf_classification(pv_patches_resized, pv_classification_model)
+            pv_patches_selected = [patch for patch, label in zip(pv_patches_resized, y_pred) if np.argmax(softmax(label)) == 1]
+        else:
+            pv_patches_selected = []
+        
+        if verbose: 
+            duration= time.time() - start_time   
+            print(f'PV ResNet50 took {round(duration, 2)} seconds')
+        
+        # for logging purposes
+        avg_pf, avg_pv = -1, -1
+
+        if len(pf_patches_selected) > 1 and len(pv_patches_selected) > 1:
+            start_time = time.time()
+            # vivax vs. falciparum
+            pvf_patches_selected = pf_patches_selected + pv_patches_selected
+            y_prob = tf_classification(pvf_patches_selected, pvf_classification_model)
+            avg_pf = np.mean(y_prob, axis=0)[0]     
+            avg_pv = np.mean(y_prob, axis=0)[1]       
+
+            # y_prob_pf = tf_classification(pf_patches_selected, pvf_classification_model)
+            # avg_pf = np.mean(y_prob_pf, axis=0)[0]
+            # y_prob_pv = tf_classification(pv_patches_selected, pvf_classification_model)
+            # avg_pv = np.mean(y_prob_pv, axis=0)[1]
+            # if verbose:
+            #     print('PVF len pv', len(y_prob_pv) , 'len pf', len(y_prob_pf))
+
+            if avg_pv > avg_pf:
+                img_result = 'pv'
+                total_pv.append(len(pv_patches_selected))
+                total_pf.append(0)
+                total_u.append(0)
+            elif avg_pf > avg_pv:
+                img_result = 'pf'
+                total_pf.append(len(pf_patches_selected))
+                total_pv.append(0)
+                total_u.append(0)
+            if verbose:
+                duration = time.time() - start_time
+                print(f'PVF ResNet50 took {round(duration, 2)} seconds')
+                decision = 'pv' if avg_pv > avg_pf else 'pf' if avg_pf > avg_pv else '??'
+                print(f'PVF ResNet50 PF {len(pf_patches_selected)} ({round(float(avg_pf), 2)}) vs PV {len(pv_patches_selected)} ({round(float(avg_pv), 2)}) | decision {decision}')
+
+        elif len(pf_patches_selected) > 1 and len(pv_patches_selected) <= 1:
+            img_result = 'pf'
+            total_pf.append(len(pf_patches_selected))
+            total_pv.append(0)
+            total_u.append(0)
+
+        elif len(pv_patches_selected) > 1 and len(pf_patches_selected) <= 1:
+            img_result = 'pv'
+            total_pv.append(len(pv_patches_selected))
+            total_pf.append(0)
+            total_u.append(0)
+
+        elif len(pv_patches_selected) <= 1 and len(pf_patches_selected) <= 1:
+            img_result = 'u'
+            total_u.append(1)
+            total_pv.append(0)
+            total_pf.append(0)
+        
+        else:
+            raise Exception('Something went wrong and no totals were added!')
+
+        new_row =   {'patient_n': patient_n, 'img': os.path.basename(img_path), 'model_score_thr': model_score_thr, \
+                    'PV_detected': len(pv_patches_resized), 'PV_selected': len(pv_patches_selected), 'PV_prob': avg_pv,\
+                    'PF_detected': len(pf_patches_resized), 'PF_selected': len(pf_patches_selected), 'PF_prob': avg_pf, \
+                    'dataset': dataset, 'result' : img_result}
+        df_logs = df_logs.append(new_row, ignore_index=True)
+
+    if verbose:        
+        duration = time.time() - total_start_time
+        print(f' Total time for {len(img_paths)} images {round(duration, 2)} seconds')
+        print('total_u', total_u)
+        print('total_pf', total_pf)
+        print('total_pv', total_pv)
     
-    
-    y_pred = tf_classification(patches_resized, model_path)   
-    
+    df_logs.to_csv(filename, index= False)
+
+    if np.mean(total_u) > 0.5:
+        result = 'u'
+    elif np.sum(total_pf ) > np.sum(total_pv):
+        result = 'pf'
+    elif np.sum(total_pv ) > np.sum(total_pf):
+        result = 'pv'
+    else:
+        raise Exception('could not classify')
+
+
+    return result

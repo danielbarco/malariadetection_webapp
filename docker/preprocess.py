@@ -3,6 +3,8 @@ import glob
 import cv2
 import numpy as np
 import copy
+from skimage.color import rgb2gray
+from skimage.filters import threshold_otsu
  
 def calculate_WBC_radius(image): 
     # convert to gray scale image
@@ -99,3 +101,31 @@ def calculate_WBC_radius(image):
                     y_count.append(y)
 
     return int(np.mean(Cell_count))
+
+def circle_crop(img):
+    '''returns a cropped image according to the circle as well as the removed top part and removed left part of the image'''
+
+    # select circle only
+    img_gray = rgb2gray(img)
+    th = threshold_otsu(img_gray)
+    fg = img_gray>th
+    # Find the bounding box of those pixels
+    coords = np.array(np.nonzero(fg))
+    min_coords = np.min(coords, axis=1) # [y1, x1]
+    max_coords = np.max(coords, axis=1) # [y2, x2]
+    height, width, c = img.shape
+    
+    ''' image[start_row:end_row, start_column:end_column] e.g. image[30:250, 100:230] or [x1:x2, y1:y2]
+    You can see that the waterfall goes vertically starting at about 30px and ending at around 250px.
+    You can see that the waterfall goes horizontally from around 100px to around 230px. 
+                '''
+
+    img_cropped = img[min_coords[0]:max_coords[0],
+                min_coords[1]:max_coords[1]]
+
+    xmin = min_coords[0] / width
+    xmax = max_coords[0] / width
+    ymin = min_coords[1] / height
+    ymax = max_coords[1] / height
+
+    return img_cropped, xmin, xmax, ymin, ymax

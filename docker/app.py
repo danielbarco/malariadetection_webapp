@@ -4,12 +4,9 @@ import streamlit as st
 import cv2
 import tifffile
 from PIL import Image
-import time
-import json
-import requests
-import io
 from os import listdir
 from os.path import isfile, join, splitext
+from tqdm import tqdm
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
@@ -26,7 +23,7 @@ from object_detection.utils import config_util
 from object_detection.utils import visualization_utils as viz_utils
 from object_detection.builders import model_builder
 import preprocess
-import prediction
+#import prediction
 
 # from streamlit group
 from load_css import local_css
@@ -40,8 +37,16 @@ def imread(image_up):
         img = tifffile.imread(image_up)
         return img
     else:
-        img = plt.imread(image_up)
-        img = img_as_ubyte(img)
+        # img = plt.imread(image_up)
+        # img = img_as_ubyte(img)
+
+        file_bytes = np.asarray(bytearray(image_up.read()), dtype=np.uint8)
+        img_bgr = cv2.imdecode(file_bytes, 1)
+        img = img_bgr[...,::-1]
+        # # img_bgr = cv2.imread(opencv_image, flags=cv2.IMREAD_IGNORE_ORIENTATION|cv2.IMREAD_COLOR) 
+
+        # img = Image.open(image_up)
+        # img = np.array(img)
     return img
 
 @st.cache(show_spinner=False)
@@ -110,68 +115,108 @@ if page == 'Thick Smear | Sample images':
     if selected_image != " 👉 Choose an image here 👈":
         selected_image = img_captions.index(selected_image)
         file_up = img_list[selected_image]
-        st.text(file_up) 
         img = plt.imread(file_up)
         image = img_as_ubyte(img)
     if not file_up:
         st.image(img_list, caption = img_captions[:-1], width = int(698/2))
        
 else:
-    file_up = st.file_uploader("Upload an image", type=["tif", "tiff", "png", "jpg", "jpeg"]) #,  accept_multiple_files= True)
-    if file_up:
-        image = imread(file_up)
+    # if not file_up:
+    file_up = st.file_uploader("Upload an image", type=["tif", "tiff", "png", "jpg", "jpeg"],  accept_multiple_files= True)
+    # if file_up:
+    #     st.text(file_up)
+        # image = imread(file_up)
 
 if file_up:
-    calc_radius = preprocess.calculate_WBC_radius(image)
-    radius = st.sidebar.slider('How large is a white blood cell ?', 10, 50, calc_radius)
-    fig, ax = plt.subplots(figsize = (8,8))
-    ax.imshow(image)
-    circ = Circle((radius*2,radius*2), radius, color = '#f63366')
-    ax.add_patch(circ)
-    ax.axis("off")
-    ax.set_title('Selected image')
+
+    with st.spinner("Loading and preprocessing image(s)"):
+        # imgs_raw = [imread(file) for file in file_up]
+        # imgs_20 = [cv2.resize(img_raw, None, fx=0.2, fy=0.2) for img_raw in imgs_raw]
+        # imgs_cropped_prct = [preprocess.circle_crop(img_20) for img_20 in imgs_20]
+        # imgs_cropped = [img_cropped_prct[0] for img_cropped_prct in imgs_cropped_prct]
+        
+        imgs_cropped = []
+        imgs_20_cropped = []
+        calc_radiuses = []
+        files = []
+        for file in tqdm(file_up):
+            img = imread(file)
+            height, width, c = img.shape
+            img_20 = cv2.resize(img, None, fx=0.2, fy=0.2)
+            img_20_cropped, xmin, xmax, ymin, ymax  = preprocess.circle_crop(img_20)
+            img_cropped =     img[int(xmin * width):int(xmax * width),
+                                    int(ymin * height) :int(ymax * height)]
+            # calc_radius = preprocess.calculate_WBC_radius(img_cropped)
+            imgs_20_cropped.append(img_20_cropped)
+            imgs_cropped.append(img_cropped)
+            # calc_radiuses.append(calc_radius)
+            files.append(file.name)
+
+    # radius = st.sidebar.slider('How large is a white blood cell ?', 10.0, 50.0, float(np.mean(calc_radiuses)))
+
+    fig = plt.figure(figsize = (8,10), facecolor= '#0e1117')
+    
+    # Compute Rows required
+    total_subplots = len(files)
+    if len(files) >= 9:
+        columns = 3
+    else:
+        columns = 2
+    rows = total_subplots // columns 
+    rows += total_subplots % columns
+    
+    for i in tqdm(range(1, columns*rows +1)):
+        if i > len(files):
+            break
+        img_cropped =  imgs_20_cropped[i-1]
+        ax = fig.add_subplot(rows, columns, i)
+        ax.imshow(img_cropped)
+        # circ = Circle((radius*2,radius*2), radius, color = '#f63366')
+        # ax.add_patch(circ)
+        ax.axis("off")
+        ax.set_title(f'{files[i-1]}', color='white', fontsize = 8, pad = 8)
     st.pyplot(fig)
 
-    with st.spinner("Detecting potential parasites"):
-        dict_ckpt_cfg = {'models/fasterrcnn_inception_v2_1024_PF_train150000/ckpt-151':
-                        'models/fasterrcnn_inception_v2_1024_PF_train150000/thick_PF_wh64.config'}
+    # with st.spinner("Detecting potential parasites"):
+    #     dict_ckpt_cfg = {'models/fasterrcnn_inception_v2_1024_PF_train150000/ckpt-151':
+    #                     'models/fasterrcnn_inception_v2_1024_PF_train150000/thick_PF_wh64.config'}
 
-        path_label = 'models/class_labels_malaria_1class.pbtxt'
+    #     path_label = 'models/class_labels_malaria_1class.pbtxt'
 
-        for path_ckpt,path_cfg in dict_ckpt_cfg.items():
-            start_time = time.time()
-            detections = prediction.faster_rcnn(image, path_cfg, path_ckpt)
-            end_time = time.time()
-            elapsed_time = end_time - start_time
-            st.text(f'Took {elapsed_time} seconds') 
+        # for path_ckpt,path_cfg in dict_ckpt_cfg.items():
+        #     start_time = time.time()
+        #     detections = prediction.faster_rcnn(image, path_cfg, path_ckpt)
+        #     end_time = time.time()
+        #     elapsed_time = end_time - start_time
+        #     st.text(f'Took {elapsed_time} seconds') 
 
-            threshold = 0.05
+        #     threshold = 0.05
 
-            label_id_offset = 1
-            image_np_with_detections = image.copy()
+        #     label_id_offset = 1
+        #     image_np_with_detections = image.copy()
 
-            category_index = label_map_util.create_category_index_from_labelmap(path_label,
-                                                                        use_display_name=True)
+        #     category_index = label_map_util.create_category_index_from_labelmap(path_label,
+        #                                                                 use_display_name=True)
 
-            viz_utils.visualize_boxes_and_labels_on_image_array(
-                    image_np_with_detections,
-                    detections['detection_boxes'],
-                    detections['detection_classes']+label_id_offset,
-                    detections['detection_scores'],
-                    category_index,
-                    use_normalized_coordinates=True,
-                    max_boxes_to_draw=400,
-                    min_score_thresh= threshold,
-                    agnostic_mode=False)
+        #     viz_utils.visualize_boxes_and_labels_on_image_array(
+        #             image_np_with_detections,
+        #             detections['detection_boxes'],
+        #             detections['detection_classes']+label_id_offset,
+        #             detections['detection_scores'],
+        #             category_index,
+        #             use_normalized_coordinates=True,
+        #             max_boxes_to_draw=400,
+        #             min_score_thresh= threshold,
+        #             agnostic_mode=False)
 
 
-            data = Image.fromarray(image_np_with_detections)
+        #     data = Image.fromarray(image_np_with_detections)
 
-            fig, ax = plt.subplots(figsize = (8,8))
-            ax.imshow(image_np_with_detections)
-            ax.axis("off")
-            ax.set_title('Faster RCNN predictions')
-            st.pyplot(fig)
+        #     fig, ax = plt.subplots(figsize = (8,8))
+        #     ax.imshow(image_np_with_detections)
+        #     ax.axis("off")
+        #     ax.set_title('Faster RCNN predictions')
+        #     st.pyplot(fig)
 
 
 
