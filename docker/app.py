@@ -128,31 +128,37 @@ else:
         # image = imread(file_up)
 
 if file_up:
+    st_preprocess_bar = st.progress(0)
+    imgs_cropped = []
+    imgs_small_cropped = []
+    calc_radiuses = []
+    files = []
+    for n, file in enumerate(tqdm(file_up)):
+        img = imread(file)
+        height, width, c = img.shape
+        reduction_prct = 600/ min([height, width]) 
+        img_small = cv2.resize(img, None, fx=reduction_prct, fy=reduction_prct)
+        img_small_cropped, xmin, xmax, ymin, ymax  = preprocess.circle_crop(img_small)
+        img_cropped =     img[int(xmin * width):int(xmax * width),
+                                int(ymin * height) :int(ymax * height)]
 
-    with st.spinner("Loading and preprocessing image(s)"):
-        # imgs_raw = [imread(file) for file in file_up]
-        # imgs_20 = [cv2.resize(img_raw, None, fx=0.2, fy=0.2) for img_raw in imgs_raw]
-        # imgs_cropped_prct = [preprocess.circle_crop(img_20) for img_20 in imgs_20]
-        # imgs_cropped = [img_cropped_prct[0] for img_cropped_prct in imgs_cropped_prct]
-        
-        imgs_cropped = []
-        imgs_20_cropped = []
-        calc_radiuses = []
-        files = []
-        for file in tqdm(file_up):
-            img = imread(file)
-            height, width, c = img.shape
-            img_20 = cv2.resize(img, None, fx=0.2, fy=0.2)
-            img_20_cropped, xmin, xmax, ymin, ymax  = preprocess.circle_crop(img_20)
-            img_cropped =     img[int(xmin * width):int(xmax * width),
-                                    int(ymin * height) :int(ymax * height)]
-            # calc_radius = preprocess.calculate_WBC_radius(img_cropped)
-            imgs_20_cropped.append(img_20_cropped)
-            imgs_cropped.append(img_cropped)
-            # calc_radiuses.append(calc_radius)
-            files.append(file.name)
+        imgs_small_cropped.append(img_small_cropped)
+        imgs_cropped.append(img_cropped)
+        files.append(file.name)
+        st_preprocess_bar.progress((n +1) /len(file_up))
+        try: 
+            calc_radius = preprocess.calculate_WBC_radius(img_small_cropped, prct_reduced= reduction_prct)
+            calc_radiuses.append(calc_radius)
+        except Exception as e:
+            print(e)
+            pass
 
-    # radius = st.sidebar.slider('How large is a white blood cell ?', 10.0, 50.0, float(np.mean(calc_radiuses)))
+
+    if calc_radiuses:
+        radius = st.sidebar.slider('How large is a white blood cell ?', 10.0, 150.0, float(np.mean(calc_radiuses)/reduction_prct))
+    else:
+        st.warning('Could not detect WBC radius, please ensure WBC radius is around 28 pixel')
+
 
     fig = plt.figure(figsize = (8,10), facecolor= '#0e1117')
     
@@ -168,11 +174,12 @@ if file_up:
     for i in tqdm(range(1, columns*rows +1)):
         if i > len(files):
             break
-        img_cropped =  imgs_20_cropped[i-1]
+        img_cropped =  imgs_small_cropped[i-1]
         ax = fig.add_subplot(rows, columns, i)
         ax.imshow(img_cropped)
-        # circ = Circle((radius*2,radius*2), radius, color = '#f63366')
-        # ax.add_patch(circ)
+        if calc_radiuses:
+            circ = Circle((radius/5*2,radius/5*2), radius/5, color = '#f63366')
+            ax.add_patch(circ)
         ax.axis("off")
         ax.set_title(f'{files[i-1]}', color='white', fontsize = 8, pad = 8)
     st.pyplot(fig)

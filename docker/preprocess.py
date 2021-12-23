@@ -6,7 +6,7 @@ import copy
 from skimage.color import rgb2gray
 from skimage.filters import threshold_otsu
  
-def calculate_WBC_radius(image): 
+def calculate_WBC_radius(image, prct_reduced = 1): 
     # convert to gray scale image
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
@@ -75,31 +75,18 @@ def calculate_WBC_radius(image):
     # Otsu's thresholding
     ret4, th4 = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-    # Initialize the list
-    Cell_count, x_count, y_count = [], [], []
-
-    # read original image, to display the circle and center detection 
-    display = image.copy()
-
     # hough transform with modified circular parameters
     circles = cv2.HoughCircles(img, cv2.HOUGH_GRADIENT, 1.2, 20,
-                               param1 = 50, param2 = 28, minRadius = 1, maxRadius = 50)
-
-    # circle detection and labeling using hough transformation
+                               param1 = int(148* prct_reduced), 
+                               param2 = int(83* prct_reduced), 
+                               minRadius = 1, 
+                               maxRadius = int(148 * prct_reduced))
     if circles is not None:
-            # convert the (x, y) coordinates and radius of the circles to integers
-            circles = np.round(circles[0, :]).astype("int")
-
-            # loop over the (x, y) coordinates and radius of the circles
-            for (x, y, r) in circles:
-
-                    cv2.circle(display, (x, y), r, (0, 255, 0), 2)
-                    cv2.rectangle(display, (x - 2, y - 2),
-                                  (x + 2, y + 2), (0, 128, 255), -1)
-                    Cell_count.append(r)
-                    x_count.append(x)
-                    y_count.append(y)
-
+        # convert the (x, y) coordinates and radius of the circles to integers
+        circles = np.round(circles[0, :]).astype("int")
+    
+    Cell_count = [circle[-1] for circle in circles]
+    print(circles)
     return int(np.mean(Cell_count))
 
 def circle_crop(img):
