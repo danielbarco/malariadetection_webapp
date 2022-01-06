@@ -86,7 +86,7 @@ def calculate_WBC_radius(image, prct_reduced = 1):
         circles = np.round(circles[0, :]).astype("int")
     
     Cell_count = [circle[-1] for circle in circles]
-    print(circles)
+    # print(circles)
     return int(np.mean(Cell_count))
 
 def circle_crop(img):

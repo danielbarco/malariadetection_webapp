@@ -33,9 +33,9 @@ def initiate_classification_model(model_path):
 
 crop_size = 1024
 
-pf_path_cfg = '../object_detection/workspace/pretrained_models/faster_rcnn_inception_resnet_v2_1024x1024_coco17_tpu-8/thick_PF_wh64.config'
-pf_path_ckpt = '../object_detection/workspace/models/fasterrcnn_inception_v2_1024_PF_train150000/ckpt-151'
-pf_model_path = '../data/weights/PF_256_resnet50_custom.h5'
+pf_path_cfg = 'models/fasterrcnn_inception_v2_1024_PF_train150000/thick_PF_wh64.config'
+pf_path_ckpt = 'models/fasterrcnn_inception_v2_1024_PF_train150000/ckpt-151'
+pf_model_path = 'models/PF_256_resnet50_custom_PV_PF_86.h5'
 pf_classification_model = initiate_classification_model(pf_model_path)
 pf_detection_model = initiate_detection_model(pf_path_cfg, pf_path_ckpt)
 
@@ -49,9 +49,9 @@ def pf_detection_model_fn(image):
 
     return detections
 
-pv_path_cfg = '../object_detection/workspace/pretrained_models/faster_rcnn_inception_resnet_v2_1024x1024_coco17_tpu-8/thick_PV_wh64.config'
-pv_path_ckpt = '../object_detection/workspace/models/fasterrcnn_inception_v2_1024_PV_train150000/ckpt-151'
-pv_model_path = '../data/weights/PV_256_resnet50_custom.h5'
+pv_path_cfg = 'models/fasterrcnn_inception_v2_1024_PV_train150000/thick_PV_wh64.config'
+pv_path_ckpt = 'models/fasterrcnn_inception_v2_1024_PV_train150000/ckpt-151'
+pv_model_path = 'models/PV_256_resnet50_custom.h5'
 pv_classification_model = initiate_classification_model(pv_model_path)
 pv_detection_model = initiate_detection_model(pv_path_cfg, pv_path_ckpt)
 
@@ -66,17 +66,17 @@ def pv_detection_model_fn(image):
     return detections
 
 
-pvf_model_path = '../data/weights/PVF_256_resnet50_custom.h5'
+pvf_model_path = 'models/PVF_256_resnet50_custom.h5'
 pvf_classification_model = initiate_classification_model(pvf_model_path)
 
 # logging
-filename = "../data/logs/logs.csv"
-os.makedirs(os.path.dirname(filename), exist_ok=True)
-if not os.path.isfile(filename):
-    df_logs = pd.DataFrame(columns = ['patient_n', 'img', 'model_score_thr', \
-                'PV_detected', 'PV_selected', 'PV_prob' ,\
-                'PF_detected', 'PF_selected', 'PF_prob', 'dataset', 'result'])
-    df_logs.to_csv(filename, index=False)
+# filename = "../data/logs/logs.csv"
+# os.makedirs(os.path.dirname(filename), exist_ok=True)
+# if not os.path.isfile(filename):
+#     df_logs = pd.DataFrame(columns = ['patient_n', 'img', 'model_score_thr', \
+#                 'PV_detected', 'PV_selected', 'PV_prob' ,\
+#                 'PF_detected', 'PF_selected', 'PF_prob', 'dataset', 'result'])
+#     df_logs.to_csv(filename, index=False)
 
 
 
@@ -219,8 +219,8 @@ def cut_patches(detections, img_full, model_score_thr = 0.0, input_img_size = 10
         patch = img_full[int(bbx[3] * width_scale):int(bbx[1] * width_scale),
                     int(bbx[2] * height_scale):int(bbx[0] * height_scale)]
         if len(patch) != 0 and len(patch.shape) == 3 and patch.shape[0] > 2 and patch.shape[1] > 2:
-            # patch_resized = cv2.resize(patch, (out_img_size, out_img_size), interpolation = cv2.INTER_CUBIC)
-            patch_resized = tf.image.resize(patch, [out_img_size, out_img_size])
+            patch_resized = cv2.resize(patch, (out_img_size, out_img_size), interpolation = cv2.INTER_CUBIC)
+            # patch_resized = tf.image.resize(patch, [out_img_size, out_img_size])
             patches_resized.append(patch_resized)
 
     return patches_resized
@@ -236,18 +236,18 @@ def tf_classification(patches, model):
     return model.predict(np.array(patches))
 
 
-def patient_eval(img_paths, img_full_paths, patient_n = -1, model_score_thr = 0.0, dataset = None, verbose = False):
+def patient_eval(img_np_bgrs, img_full_bgrs, patient_n = -1, model_score_thr = 0.0, dataset = None, verbose = False):
     total_pf = []
     total_pv = []
     total_u = []
-    df_logs = pd.read_csv(filename)
+    # df_logs = pd.read_csv(filename)
     total_start_time = time.time()
 
-    for img_path, img_full_path in zip(img_paths, img_full_paths):
+    for img_np_bgr, img_full_bgr in zip(img_np_bgrs, img_full_bgrs):
         
         #load images
-        img_np_bgr = cv2.imread(img_path, flags=cv2.IMREAD_IGNORE_ORIENTATION|cv2.IMREAD_COLOR)   
-        img_full_bgr = cv2.imread(img_full_path, flags=cv2.IMREAD_IGNORE_ORIENTATION|cv2.IMREAD_COLOR) 
+        # img_np_bgr = cv2.imread(img_path, flags=cv2.IMREAD_IGNORE_ORIENTATION|cv2.IMREAD_COLOR)   
+        # img_full_bgr = cv2.imread(img_full_path, flags=cv2.IMREAD_IGNORE_ORIENTATION|cv2.IMREAD_COLOR) 
         img_np = img_np_bgr[...,::-1]
         img_full = img_full_bgr[...,::-1]
 
@@ -294,18 +294,19 @@ def patient_eval(img_paths, img_full_paths, patient_n = -1, model_score_thr = 0.
 
         if len(pf_patches_selected) > 1 and len(pv_patches_selected) > 1:
             start_time = time.time()
+
             # vivax vs. falciparum
             pvf_patches_selected = pf_patches_selected + pv_patches_selected
-            y_prob = tf_classification(pvf_patches_selected, pvf_classification_model)
-            avg_pf = np.mean(y_prob, axis=0)[0]     
-            avg_pv = np.mean(y_prob, axis=0)[1]       
+            # y_prob = tf_classification(pvf_patches_selected, pvf_classification_model)
+            # avg_pf = np.mean(y_prob, axis=0)[0]     
+            # avg_pv = np.mean(y_prob, axis=0)[1]       
 
-            # y_prob_pf = tf_classification(pf_patches_selected, pvf_classification_model)
-            # avg_pf = np.mean(y_prob_pf, axis=0)[0]
-            # y_prob_pv = tf_classification(pv_patches_selected, pvf_classification_model)
-            # avg_pv = np.mean(y_prob_pv, axis=0)[1]
-            # if verbose:
-            #     print('PVF len pv', len(y_prob_pv) , 'len pf', len(y_prob_pf))
+            y_prob_pf = tf_classification(pf_patches_selected, pvf_classification_model)
+            avg_pf = np.sum(y_prob_pf, axis=0)[0] / len(pvf_patches_selected)
+            y_prob_pv = tf_classification(pv_patches_selected, pvf_classification_model)
+            avg_pv = np.sum(y_prob_pv, axis=0)[1]/ len(pvf_patches_selected)
+            if verbose:
+                print('PVF len pv', len(y_prob_pv) , 'len pf', len(y_prob_pf))
 
             if avg_pv > avg_pf:
                 img_result = 'pv'
@@ -344,20 +345,20 @@ def patient_eval(img_paths, img_full_paths, patient_n = -1, model_score_thr = 0.
         else:
             raise Exception('Something went wrong and no totals were added!')
 
-        new_row =   {'patient_n': patient_n, 'img': os.path.basename(img_path), 'model_score_thr': model_score_thr, \
-                    'PV_detected': len(pv_patches_resized), 'PV_selected': len(pv_patches_selected), 'PV_prob': avg_pv,\
-                    'PF_detected': len(pf_patches_resized), 'PF_selected': len(pf_patches_selected), 'PF_prob': avg_pf, \
-                    'dataset': dataset, 'result' : img_result}
-        df_logs = df_logs.append(new_row, ignore_index=True)
+        # new_row =   {'patient_n': patient_n, 'img': os.path.basename(img_path), 'model_score_thr': model_score_thr, \
+        #             'PV_detected': len(pv_patches_resized), 'PV_selected': len(pv_patches_selected), 'PV_prob': avg_pv,\
+        #             'PF_detected': len(pf_patches_resized), 'PF_selected': len(pf_patches_selected), 'PF_prob': avg_pf, \
+        #             'dataset': dataset, 'result' : img_result}
+        # df_logs = df_logs.append(new_row, ignore_index=True)
 
     if verbose:        
         duration = time.time() - total_start_time
-        print(f' Total time for {len(img_paths)} images {round(duration, 2)} seconds')
+        print(f' Total time for {len(img_np_bgrs)} images {round(duration, 2)} seconds')
         print('total_u', total_u)
         print('total_pf', total_pf)
         print('total_pv', total_pv)
     
-    df_logs.to_csv(filename, index= False)
+    # df_logs.to_csv(filename, index= False)
 
     if np.mean(total_u) > 0.5:
         result = 'u'

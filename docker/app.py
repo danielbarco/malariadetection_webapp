@@ -10,26 +10,26 @@ from tqdm import tqdm
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
+from skimage.util import img_as_ubyte
 
 
-from tensorflow.keras.models import load_model
-from tensorflow.image import resize_with_pad
-from tensorflow import expand_dims, function, float32, convert_to_tensor
-from tensorflow.nn import softmax
-from tensorflow.compat.v2.train import Checkpoint
+# from tensorflow.keras.models import load_model
+# from tensorflow.image import resize_with_pad
+# from tensorflow import expand_dims, function, float32, convert_to_tensor
+# from tensorflow.nn import softmax
+# from tensorflow.compat.v2.train import Checkpoint
 
-from object_detection.utils import label_map_util
-from object_detection.utils import config_util
-from object_detection.utils import visualization_utils as viz_utils
-from object_detection.builders import model_builder
+# from object_detection.utils import label_map_util
+# from object_detection.utils import config_util
+# from object_detection.utils import visualization_utils as viz_utils
+# from object_detection.builders import model_builder
 import preprocess
-#import prediction
+import prediction
 
 # from streamlit group
 from load_css import local_css
 local_css("style.css")
 
-from skimage.util import img_as_ubyte
 
 def imread(image_up):
     ext = splitext(image_up.name)[-1]
@@ -49,50 +49,50 @@ def imread(image_up):
         # img = np.array(img)
     return img
 
-@st.cache(show_spinner=False)
-def run_segmentation(model, image, diam, channels, flow_threshold, cellprob_threshold):
-    masks, flows, styles, diams = model.eval(image, 
-            # batch_size = 8,
-            diameter = diam, # 100
-            channels = channels,
-            invert = True,
-            # rescale = 0.5,
-            net_avg=False,
-            flow_threshold = flow_threshold, # 1
-            cellprob_threshold = cellprob_threshold, # -4
-                            )
-    return masks, flows, styles, diams
+# @st.cache(show_spinner=False)
+# def run_segmentation(model, image, diam, channels, flow_threshold, cellprob_threshold):
+#     masks, flows, styles, diams = model.eval(image, 
+#             # batch_size = 8,
+#             diameter = diam, # 100
+#             channels = channels,
+#             invert = True,
+#             # rescale = 0.5,
+#             net_avg=False,
+#             flow_threshold = flow_threshold, # 1
+#             cellprob_threshold = cellprob_threshold, # -4
+#                             )
+#     return masks, flows, styles, diams
 
 
-@st.cache(show_spinner=False)
-def transform_image(arr):
-    my_transforms = transforms.Compose([transforms.Resize((224, 224)),
-                                        # transforms.CenterCrop(224),
-                                        transforms.ToTensor(),
-                                        transforms.Normalize(
-                                            [0.485, 0.456, 0.406],
-                                            [0.229, 0.224, 0.225])])
-#     image = Image.open(io.BytesIO(image_bytes))
-    im = Image.fromarray(arr)
-    return my_transforms(im).unsqueeze(0)
+# @st.cache(show_spinner=False)
+# def transform_image(arr):
+#     my_transforms = transforms.Compose([transforms.Resize((224, 224)),
+#                                         # transforms.CenterCrop(224),
+#                                         transforms.ToTensor(),
+#                                         transforms.Normalize(
+#                                             [0.485, 0.456, 0.406],
+#                                             [0.229, 0.224, 0.225])])
+# #     image = Image.open(io.BytesIO(image_bytes))
+#     im = Image.fromarray(arr)
+#     return my_transforms(im).unsqueeze(0)
 
-class_names = ['parasitized', 'uninfected']
 
-def get_prediction(arr):
-    tensor = transform_image(arr)
-    outputs = model.forward(tensor)
-    _, y_hat = outputs.max(1)
-    return class_names[y_hat]
+# def get_prediction(arr):
+#     tensor = transform_image(arr)
+#     outputs = model.forward(tensor)
+#     _, y_hat = outputs.max(1)
+#     return class_names[y_hat]
 
-def get_prediction_tf(arr):
-    '''function for tf model; resizes and pads an image array and then returns the prediction i.e. the most likely class'''
-    arr = resize_with_pad(arr, 100, 100, method= 'bilinear', antialias=False)
-    arr = expand_dims(arr, 0) # Create a batch
-    predictions = custom_model.predict(arr)
-    score = softmax(predictions[0])
-    #print(class_names[np.argmax(score)])
-    return class_names[np.argmax(score)]
+# def get_prediction_tf(arr):
+#     '''function for tf model; resizes and pads an image array and then returns the prediction i.e. the most likely class'''
+#     arr = resize_with_pad(arr, 100, 100, method= 'bilinear', antialias=False)
+#     arr = expand_dims(arr, 0) # Create a batch
+#     predictions = custom_model.predict(arr)
+#     score = softmax(predictions[0])
+#     #print(class_names[np.argmax(score)])
+#     return class_names[np.argmax(score)]
       
+class_names = ['parasitized', 'uninfected']
 
 st.title('Malaria Detection')
 # st.text('Segmentataion -> Single cell ROI -> Classification')
@@ -122,7 +122,7 @@ if page == 'Thick Smear | Sample images':
        
 else:
     # if not file_up:
-    file_up = st.file_uploader("Upload an image", type=["tif", "tiff", "png", "jpg", "jpeg"],  accept_multiple_files= True)
+    file_up = st.file_uploader("Upload all images from one patient", type=["tif", "tiff", "png", "jpg", "jpeg"],  accept_multiple_files= True)
     # if file_up:
     #     st.text(file_up)
         # image = imread(file_up)
@@ -136,7 +136,11 @@ if file_up:
     for n, file in enumerate(tqdm(file_up)):
         img = imread(file)
         height, width, c = img.shape
-        reduction_prct = 600/ min([height, width]) 
+        if min([height, width]) > 600: 
+            reduction_prct = 600/ min([height, width]) 
+        else:
+            st.error('image too small')
+            break
         img_small = cv2.resize(img, None, fx=reduction_prct, fy=reduction_prct)
         img_small_cropped, xmin, xmax, ymin, ymax  = preprocess.circle_crop(img_small)
         img_cropped =     img[int(xmin * width):int(xmax * width),
@@ -160,27 +164,45 @@ if file_up:
         st.warning('Could not detect WBC radius, please ensure WBC radius is around 28 pixel')
 
 
-    fig = plt.figure(figsize = (8,10), facecolor= '#0e1117')
+    fig = plt.figure(figsize = (8,8), facecolor= '#0e1117')
     
-    # Compute Rows required
-    total_subplots = len(files)
-    if len(files) >= 9:
-        columns = 3
-    else:
-        columns = 2
-    rows = total_subplots // columns 
-    rows += total_subplots % columns
+    # # Compute Rows required
+    # total_subplots = len(files)
+    # # if len(files) >= 9:
+    # #     columns = 3
+    # # else:
+    # columns = 2
+    # rows = total_subplots // columns 
+    # rows += total_subplots % columns
+
+    columns = 2
+    rows = 2
     
     for i in tqdm(range(1, columns*rows +1)):
+        if i > len(files):
+            break
         img_cropped =  imgs_small_cropped[i-1]
         ax = fig.add_subplot(rows, columns, i)
         ax.imshow(img_cropped)
+        # ax.autoscale_view('tight')
         if calc_radiuses:
             circ = Circle((radius/5*2,radius/5*2), radius/5, color = '#f63366')
             ax.add_patch(circ)
         ax.axis("off")
-        ax.set_title(f'{files[i-1]}', color='white', fontsize = 8, pad = 8)
+        ax.set_title(f'{files[i-1]}', color='white', fontsize = 10) 
+        
+    if len(files) > 4:
+        st.info(f'Showing 4 of {len(files)} images')
     st.pyplot(fig)
+
+    # prediction
+    with st.spinner("Detecting potential parasites"):
+        result = prediction.patient_eval(imgs_small_cropped, imgs_cropped)
+        st.info(f'This detection model is only for research purposes. All liability is completely disclaimed. ')
+        dict_result = {'u': 'uninfected', 'pf': 'infected with plasmodium falciparum', 'pv': 'infected with plasmodium vivax'}
+        st.subheader(f'The patient is {dict_result[result]}')
+
+
 
     # with st.spinner("Detecting potential parasites"):
     #     dict_ckpt_cfg = {'models/fasterrcnn_inception_v2_1024_PF_train150000/ckpt-151':
