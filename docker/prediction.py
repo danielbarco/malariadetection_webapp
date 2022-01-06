@@ -13,7 +13,7 @@ import time
 from PIL import Image
 from six import BytesIO
 import cv2
-import os
+import random
 
 
 def initiate_detection_model(path_cfg, path_ckpt):
@@ -240,6 +240,9 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.0, data
     total_pf = []
     total_pv = []
     total_u = []
+    pf_all_selected_patches = []
+    pv_all_selected_patches = []
+    selected_patches = []
     # df_logs = pd.read_csv(filename)
     total_start_time = time.time()
 
@@ -313,11 +316,15 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.0, data
                 total_pv.append(len(pv_patches_selected))
                 total_pf.append(0)
                 total_u.append(0)
+                if len(pv_all_selected_patches) < 9:
+                    pv_all_selected_patches = pv_all_selected_patches + pv_patches_selected
             elif avg_pf > avg_pv:
                 img_result = 'pf'
                 total_pf.append(len(pf_patches_selected))
                 total_pv.append(0)
                 total_u.append(0)
+                if len(pf_all_selected_patches) < 9:
+                    pf_all_selected_patches = pf_all_selected_patches + pf_patches_selected
             if verbose:
                 duration = time.time() - start_time
                 print(f'PVF ResNet50 took {round(duration, 2)} seconds')
@@ -329,12 +336,16 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.0, data
             total_pf.append(len(pf_patches_selected))
             total_pv.append(0)
             total_u.append(0)
+            if len(pf_all_selected_patches) < 9:
+                pf_all_selected_patches = pf_all_selected_patches + pf_patches_selected
 
         elif len(pv_patches_selected) > 1 and len(pf_patches_selected) <= 1:
             img_result = 'pv'
             total_pv.append(len(pv_patches_selected))
             total_pf.append(0)
             total_u.append(0)
+            if len(pv_all_selected_patches) < 9:
+                pv_all_selected_patches = pv_all_selected_patches + pv_patches_selected
 
         elif len(pv_patches_selected) <= 1 and len(pf_patches_selected) <= 1:
             img_result = 'u'
@@ -353,7 +364,7 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.0, data
 
     if verbose:        
         duration = time.time() - total_start_time
-        print(f' Total time for {len(img_np_bgrs)} images {round(duration, 2)} seconds')
+        print(f' Total time for {len(img_np)} images {round(duration, 2)} seconds')
         print('total_u', total_u)
         print('total_pf', total_pf)
         print('total_pv', total_pv)
@@ -362,12 +373,15 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.0, data
 
     if np.mean(total_u) > 0.5:
         result = 'u'
+        selected_patches = random.shuffle(pf_all_selected_patches + pv_all_selected_patches)
     elif np.sum(total_pf ) > np.sum(total_pv):
         result = 'pf'
+        selected_patches = pf_all_selected_patches
     elif np.sum(total_pv ) > np.sum(total_pf):
         result = 'pv'
+        selected_patches = pv_all_selected_patches
     else:
         raise Exception('could not classify')
 
 
-    return result
+    return result, selected_patches
