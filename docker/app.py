@@ -132,4 +132,4 @@ if file_up:
         result = prediction.patient_eval(imgs_small_cropped, imgs_cropped)
         st.info(f'This detection model is only for research purposes. All liability is completely disclaimed. ')
         dict_result = {'u': 'uninfected', 'pf': 'infected with plasmodium falciparum', 'pv': 'infected with plasmodium vivax'}
-        st.subheader(f'The patient is {dict_result[result]}')
+        st.subheader(f'The patient is {dict_result[result]}.')

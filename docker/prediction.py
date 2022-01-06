@@ -236,20 +236,20 @@ def tf_classification(patches, model):
     return model.predict(np.array(patches))
 
 
-def patient_eval(img_np_bgrs, img_full_bgrs, patient_n = -1, model_score_thr = 0.0, dataset = None, verbose = False):
+def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.0, dataset = None, verbose = False):
     total_pf = []
     total_pv = []
     total_u = []
     # df_logs = pd.read_csv(filename)
     total_start_time = time.time()
 
-    for img_np_bgr, img_full_bgr in zip(img_np_bgrs, img_full_bgrs):
+    for img_np, img_full in zip(imgs_np, imgs_full):
         
         #load images
         # img_np_bgr = cv2.imread(img_path, flags=cv2.IMREAD_IGNORE_ORIENTATION|cv2.IMREAD_COLOR)   
         # img_full_bgr = cv2.imread(img_full_path, flags=cv2.IMREAD_IGNORE_ORIENTATION|cv2.IMREAD_COLOR) 
-        img_np = img_np_bgr[...,::-1]
-        img_full = img_full_bgr[...,::-1]
+        # img_np = img_np_bgr[...,::-1]
+        # img_full = img_full_bgr[...,::-1]
 
         # Falciparum object detection & filter with ResNet50
         start_time = time.time()
