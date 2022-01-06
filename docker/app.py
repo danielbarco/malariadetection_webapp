@@ -172,8 +172,6 @@ if file_up:
     rows += total_subplots % columns
     
     for i in tqdm(range(1, columns*rows +1)):
-        if i > len(files):
-            break
         img_cropped =  imgs_small_cropped[i-1]
         ax = fig.add_subplot(rows, columns, i)
         ax.imshow(img_cropped)
