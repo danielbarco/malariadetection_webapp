@@ -111,7 +111,7 @@ if file_up:
         st.warning('Could not detect WBC radius, please ensure WBC radius is around 28 pixel')
 
 
-    fig = plt.figure(figsize = (8,8), facecolor= '#0e1117')
+    fig = plt.figure(figsize = (8,8), facecolor= (0, 0, 0, 0))
 
     columns = 2
     rows = 2
@@ -147,15 +147,15 @@ if file_up:
             time_start = time.time()
             result, selected_patches = prediction.patient_eval(imgs_small_cropped, imgs_cropped, model_score_thr = 0.5)
             prediction_time = time.time() - time_start
-            st.info(f'This detection model is only for research purposes. All liability is completely disclaimed. ')
+            st.info(f'This detection model is only for research purposes. It can detect p. falciparum and p. vivax. All liability is completely disclaimed. ')
             st.info(f'Took {prediction_time/ len(imgs_cropped)} s/ image')
             dict_result = {'u': 'uninfected', 
             'pf': 'plasmodium falciparum', 
             'pv': 'plasmodium vivax'}
             st.subheader(f'Result: {dict_result[result]}.')
 
-        st.warning('Please confirm by looking at the following images:')
-        fig_results = plt.figure(figsize = (8,8), facecolor= '#0e1117')
+        st.warning('Please confirm the result by looking at the following images:')
+        fig_results = plt.figure(figsize = (8,8), facecolor= (0, 0, 0, 0))
 
         columns = 3
         rows = 3
