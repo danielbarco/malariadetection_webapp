@@ -1,8 +1,5 @@
-import os, sys
-import glob
 import cv2
 import numpy as np
-import copy
 from skimage.color import rgb2gray
 from skimage.filters import threshold_otsu
  
@@ -116,3 +113,15 @@ def circle_crop(img):
     ymax = max_coords[1] / height
 
     return img_cropped, xmin, xmax, ymin, ymax
+
+def pad(img, height, width):
+    '''
+    pad original image
+    '''
+    target = max(height, width)
+    left_pad = round(float((target - width)) / 2)
+    right_pad = round(float(target - width) - left_pad)
+    top_pad = round(float((target - height)) / 2)
+    bottom_pad = round(float(target - height) - top_pad)
+    padded_img = np.pad(img, ((top_pad, bottom_pad), (left_pad, right_pad),(0,0)), 'constant') 
+    return padded_img

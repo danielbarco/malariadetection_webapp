@@ -14,6 +14,7 @@ from PIL import Image
 from six import BytesIO
 import cv2
 import random
+import os
 
 
 def initiate_detection_model(path_cfg, path_ckpt):
@@ -70,14 +71,13 @@ pvf_model_path = 'models/PVF_256_resnet50_custom.h5'
 pvf_classification_model = initiate_classification_model(pvf_model_path)
 
 # logging
-# filename = "../data/logs/logs.csv"
-# os.makedirs(os.path.dirname(filename), exist_ok=True)
-# if not os.path.isfile(filename):
-#     df_logs = pd.DataFrame(columns = ['patient_n', 'img', 'model_score_thr', \
-#                 'PV_detected', 'PV_selected', 'PV_prob' ,\
-#                 'PF_detected', 'PF_selected', 'PF_prob', 'dataset', 'result'])
-#     df_logs.to_csv(filename, index=False)
-
+log_filename = "logging/logs.csv"
+os.makedirs(os.path.dirname(log_filename), exist_ok=True)
+if not os.path.isfile(log_filename):
+    df_logs = pd.DataFrame(columns = ['patient_n', 'img', 'model_score_thr', \
+                'PV_detected', 'PV_selected', 'PV_prob' ,\
+                'PF_detected', 'PF_selected', 'PF_prob', 'dataset', 'result'])
+    df_logs.to_csv(log_filename, index=False)
 
 
 def load_image_into_numpy_array(path):
@@ -181,7 +181,7 @@ def calc_iou_individual(pred_box, gt_box):
     iou = inter_area / (true_box_area + pred_box_area - inter_area)
     return iou
 
-def cut_patches(detections, img_full, model_score_thr = 0.0, input_img_size = 1024, out_img_size = 256):
+def cut_patches(detections, img_full, model_score_thr = 0.5, input_img_size = 1024, out_img_size = 256):
     '''Takes tf objecdetection scores and boxes and cuts the patches from the full image.
     This allows for higher resolution patches.
     Args:
@@ -236,14 +236,14 @@ def tf_classification(patches, model):
     return model.predict(np.array(patches))
 
 
-def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.0, dataset = None, verbose = False):
+def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, dataset = None, verbose = False):
     total_pf = []
     total_pv = []
     total_u = []
     pf_all_selected_patches = []
     pv_all_selected_patches = []
     selected_patches = []
-    # df_logs = pd.read_csv(filename)
+    df_logs = pd.read_csv(log_filename)
     total_start_time = time.time()
 
     for img_np, img_full in zip(imgs_np, imgs_full):
@@ -254,6 +254,11 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.0, data
         # img_np = img_np_bgr[...,::-1]
         # img_full = img_full_bgr[...,::-1]
 
+        pil_img_np = Image.fromarray(img_np,"RGB")
+        pil_img_np.save("logging/imgs/img_np.jpg")
+        pil_img_full = Image.fromarray(img_full,"RGB")
+        pil_img_full.save("logging/imgs/img_full.jpg")
+
         # Falciparum object detection & filter with ResNet50
         start_time = time.time()
         detections = object_detection(img_np, pf_detection_model_fn)
@@ -262,6 +267,9 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.0, data
             print(f'PF detection took {round(duration, 2)} seconds')
 
         pf_patches_resized = cut_patches(detections, img_full, model_score_thr = model_score_thr , input_img_size = 1024, out_img_size = 256)
+        for n, patch in enumerate(pf_patches_resized[0:5]):
+            pil_patch = Image.fromarray(patch,"RGB")
+            pil_patch.save(f"logging/imgs/pf_patch_{n}.jpg")
         start_time = time.time()
         if len(pf_patches_resized) > 0:
             y_pred = tf_classification(pf_patches_resized, pf_classification_model)
@@ -356,11 +364,11 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.0, data
         else:
             raise Exception('Something went wrong and no totals were added!')
 
-        # new_row =   {'patient_n': patient_n, 'img': os.path.basename(img_path), 'model_score_thr': model_score_thr, \
-        #             'PV_detected': len(pv_patches_resized), 'PV_selected': len(pv_patches_selected), 'PV_prob': avg_pv,\
-        #             'PF_detected': len(pf_patches_resized), 'PF_selected': len(pf_patches_selected), 'PF_prob': avg_pf, \
-        #             'dataset': dataset, 'result' : img_result}
-        # df_logs = df_logs.append(new_row, ignore_index=True)
+        new_row =   {'patient_n': patient_n, 'img': -1, 'model_score_thr': model_score_thr, \
+                    'PV_detected': len(pv_patches_resized), 'PV_selected': len(pv_patches_selected), 'PV_prob': avg_pv,\
+                    'PF_detected': len(pf_patches_resized), 'PF_selected': len(pf_patches_selected), 'PF_prob': avg_pf, \
+                    'dataset': dataset, 'result' : img_result}
+        df_logs = df_logs.append(new_row, ignore_index=True)
 
     if verbose:        
         duration = time.time() - total_start_time
@@ -368,8 +376,9 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.0, data
         print('total_u', total_u)
         print('total_pf', total_pf)
         print('total_pv', total_pv)
+        print('threshold', model_score_thr)
     
-    # df_logs.to_csv(filename, index= False)
+    df_logs.to_csv(log_filename, index= False)
 
     if np.mean(total_u) > 0.5:
         result = 'u'

@@ -1,5 +1,6 @@
 import numpy as np
 import streamlit as st
+from PIL import Image
 
 import cv2
 import tifffile
@@ -14,6 +15,7 @@ from skimage.util import img_as_ubyte
 import preprocess
 import prediction
 import time
+import tempfile
 
 # from streamlit group
 from load_css import local_css
@@ -26,15 +28,21 @@ def imread(image_up):
         img = tifffile.imread(image_up)
         return img
     else:
-
-        file_bytes = np.asarray(bytearray(image_up.read()), dtype=np.uint8)
-        img_bgr = cv2.imdecode(file_bytes, 1)
-        img = img_bgr[...,::-1]
-    return img
+        tfile = tempfile.NamedTemporaryFile(delete=False)
+        tfile.write(image_up.read())
+        img_np_bgr = cv2.imread(tfile.name, flags=cv2.IMREAD_IGNORE_ORIENTATION|cv2.IMREAD_COLOR)   
+        return img_np_bgr[...,::-1]
+    #     file_bytes = np.asarray(bytearray(image_up.read()), dtype=np.uint8)
+    #     img_bgr = cv2.imdecode(file_bytes, 1)
+    #   return img_bgr[...,::-1]
+        # img = np.array(Image.open(image_up))
+        # return img
+    
 
 @st.cache(show_spinner=False)
 def load_crop_wbc_estimation(file_up):    
-    imgs_cropped = []
+    imgs_padded_cropped = []
+    imgs_1024_padded_cropped = []
     imgs_small_cropped = []
     calc_radiuses = []
     files = []
@@ -50,9 +58,15 @@ def load_crop_wbc_estimation(file_up):
         img_small_cropped, xmin, xmax, ymin, ymax  = preprocess.circle_crop(img_small)
         img_cropped =     img[int(xmin * width):int(xmax * width),
                                 int(ymin * height) :int(ymax * height)]
-
+        # pad high resolution image
+        height_cropped, width_cropped, c = img_cropped.shape
+        img_padded_cropped = preprocess.pad(img_cropped, height_cropped, width_cropped)
+        img_padded_cropped_pil = Image.fromarray(img_padded_cropped)
+        img_1024_padded_cropped= np.array(img_padded_cropped_pil.resize((1024, 1024), Image.ANTIALIAS))
+        # img_1024_padded_cropped = img_padded_cropped.resize(img_padded_cropped, (1024, 1024), interpolation = cv2.INTER_AREA)
+        imgs_padded_cropped.append(img_padded_cropped)
+        imgs_1024_padded_cropped.append(img_1024_padded_cropped)
         imgs_small_cropped.append(img_small_cropped)
-        imgs_cropped.append(img_cropped)
         files.append(file.name)
         st_preprocess_bar.progress((n +1) /len(file_up))
         try: 
@@ -61,7 +75,8 @@ def load_crop_wbc_estimation(file_up):
         except Exception as e:
             print(e)
             pass
-    return imgs_cropped, imgs_small_cropped, calc_radiuses, files, reduction_prct
+
+    return imgs_padded_cropped, imgs_1024_padded_cropped, imgs_small_cropped, calc_radiuses, files, reduction_prct
 
 
 class_names = ['parasitized', 'uninfected']
@@ -101,9 +116,11 @@ else:
         # image = imread(file_up)
 
 if file_up:
+    info_element = st.empty()
+    images_element = st.empty()
     st_preprocess_bar = st.progress(0)
-    with st.spinner("Preprocessing image(s)"):
-        imgs_cropped, imgs_small_cropped, calc_radiuses, files, reduction_prct = load_crop_wbc_estimation(file_up)
+    info_element.info("Preprocessing image(s)")
+    imgs_padded_cropped, imgs_1024_padded_cropped, imgs_small_cropped, calc_radiuses, files, reduction_prct = load_crop_wbc_estimation(file_up)
 
     if calc_radiuses:
         radius = st.sidebar.slider('How large is a white blood cell ?', 10.0, 150.0, float(np.mean(calc_radiuses)/reduction_prct))
@@ -121,50 +138,46 @@ if file_up:
             break
         img_cropped =  imgs_small_cropped[i-1]
         ax = fig.add_subplot(rows, columns, i)
-        ax.imshow(img_cropped)
+        ax.imshow(img_cropped) 
         # ax.autoscale_view('tight')
         if calc_radiuses:
             circ = Circle((radius/5*2,radius/5*2), radius/5, color = '#f63366')
             ax.add_patch(circ)
         ax.axis("off")
-        ax.set_title(f'{files[i-1]}', color='white', fontsize = 10) 
-
-    info_element = st.empty()
-    images_element = st.empty()
+        ax.set_title(f'{files[i-1]}', color= 'grey', fontsize = 10) 
 
     if len(files) > 4:
         info_element.info(f'Showing 4 of {len(files)} images')
     images_element.pyplot(fig)
     
-    if st.sidebar.checkbox("Confirm white blood cell size. Red point in top left corner of the image(s) as reference"):
-        st_preprocess_bar.empty()
-        info_element.empty()
-        images_element.empty()
+    # if st.sidebar.checkbox("Confirm white blood cell size. Red point in top left corner of the image(s) as reference"):
 
+    # prediction
+    st_preprocess_bar.empty()
+    info_element.info("Detecting potential parasites, this may take a while...")
+    time_start = time.time()
+    result, selected_patches = prediction.patient_eval(imgs_1024_padded_cropped, imgs_padded_cropped, model_score_thr = 0.5, verbose=True)
+    prediction_time = time.time() - time_start
+    info_element.empty()
+    images_element.empty()
+    st.warning(f'This detection model is only for research purposes. It can detect p. falciparum and p. vivax. All liability is completely disclaimed. ')
+    st.success(f'Took {prediction_time/ len(imgs_1024_padded_cropped)} s/ image')
+    dict_result = {'u': 'uninfected', 
+    'pf': 'plasmodium falciparum', 
+    'pv': 'plasmodium vivax'}
+    st.subheader(f'Result: {dict_result[result]}.')
 
-        # prediction
-        with st.spinner("Detecting potential parasites"):
-            time_start = time.time()
-            result, selected_patches = prediction.patient_eval(imgs_small_cropped, imgs_cropped, model_score_thr = 0.5)
-            prediction_time = time.time() - time_start
-            st.info(f'This detection model is only for research purposes. It can detect p. falciparum and p. vivax. All liability is completely disclaimed. ')
-            st.info(f'Took {prediction_time/ len(imgs_cropped)} s/ image')
-            dict_result = {'u': 'uninfected', 
-            'pf': 'plasmodium falciparum', 
-            'pv': 'plasmodium vivax'}
-            st.subheader(f'Result: {dict_result[result]}.')
+    st.info('Please confirm the result by looking at the following images:')
+    fig_results = plt.figure(figsize = (8,8), facecolor= (0, 0, 0, 0))
 
-        st.warning('Please confirm the result by looking at the following images:')
-        fig_results = plt.figure(figsize = (8,8), facecolor= (0, 0, 0, 0))
-
-        columns = 3
-        rows = 3
-        
-        for i in tqdm(range(1, columns*rows +1)):
-            if i > len(selected_patches):
-                break
-            selected_patch =  selected_patches[i-1]
-            ax = fig_results.add_subplot(rows, columns, i)
-            ax.axis("off")
-            ax.imshow(selected_patch)
-        st.pyplot(fig_results)
+    columns = 3
+    rows = 3
+    
+    for i in tqdm(range(1, columns*rows +1)):
+        if i > len(selected_patches):
+            break
+        selected_patch =  selected_patches[i-1]
+        ax = fig_results.add_subplot(rows, columns, i)
+        ax.axis("off")
+        ax.imshow(selected_patch)
+    st.pyplot(fig_results)
