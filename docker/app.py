@@ -167,17 +167,18 @@ if file_up:
     'pv': 'plasmodium vivax'}
     st.subheader(f'Result: {dict_result[result]}.')
 
-    st.info('Please confirm the result by looking at the following images:')
-    fig_results = plt.figure(figsize = (8,8), facecolor= (0, 0, 0, 0))
+    if result in ['pv', 'pf']:
+        st.info('The following images show infected cells:')
+        fig_results = plt.figure(figsize = (8,8), facecolor= (0, 0, 0, 0))
 
-    columns = 3
-    rows = 3
+        columns = 3
+        rows = 3
     
-    for i in tqdm(range(1, columns*rows +1)):
-        if i > len(selected_patches):
-            break
-        selected_patch =  selected_patches[i-1]
-        ax = fig_results.add_subplot(rows, columns, i)
-        ax.axis("off")
-        ax.imshow(selected_patch)
-    st.pyplot(fig_results)
+        for i in tqdm(range(1, columns*rows +1)):
+            if i > len(selected_patches):
+                break
+            selected_patch =  selected_patches[i-1]
+            ax = fig_results.add_subplot(rows, columns, i)
+            ax.axis("off")
+            ax.imshow(selected_patch)
+        st.pyplot(fig_results)
