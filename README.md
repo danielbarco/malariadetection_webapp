@@ -29,5 +29,13 @@ Follow the link provided in the console and you should be able to see the stream
 
 **[Publicly Available Malria Datasets](https://github.com/danielbarco/malaria_datasets)**
 
+**Run Cloudflare Tunnel**
+
+To access the cloudflare tunnel at demo.malariadetection.ch run
+
+```bash
+cloudflare tunnel run
+```
+
 Made with ❤️ in Switzerland ⛰️
   
