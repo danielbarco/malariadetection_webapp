@@ -88,7 +88,7 @@ st.title('Malaria Detection')
 page = st.sidebar.selectbox("Choose slide type", ('Thick Smear', 'Thick Smear | Sample images'))
 
 st.sidebar.title("About")
-st.sidebar.info("- Trained on Giemsa stained _plasmodia falsiparum & vivax_  [NIH Data] (https://data.lhncbc.nlm.nih.gov/public/Malaria/index.html)   \n \
+st.sidebar.info("- Trained on Giemsa stained _plasmodia falciparum & vivax_  [NIH Data] (https://data.lhncbc.nlm.nih.gov/public/Malaria/index.html)   \n \
 - Powered by TensorFlow and [Streamlit] (https://docs.streamlit.io/en/stable/api.html) ")
 
 

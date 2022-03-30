@@ -34,7 +34,7 @@ Follow the link provided in the console and you should be able to see the stream
 To access the cloudflare tunnel at demo.malariadetection.ch run
 
 ```bash
-cloudflare tunnel run
+cloudflared tunnel run
 ```
 
 Made with ❤️ in Switzerland ⛰️
