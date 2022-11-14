@@ -23,15 +23,24 @@ local_css("style.css")
 
 
 def imread(image_up):
-    ext = splitext(image_up.name)[-1]
-    if ext== '.tif' or ext=='tiff':
-        img = tifffile.imread(image_up)
-        return img
+    if page == 'Thick Smear | Sample images':
+        ext = splitext(image_up)[-1]
+        if ext== '.tif' or ext=='tiff':
+            img = tifffile.imread(image_up)
+            return img
+        else:
+            img_np_bgr = cv2.imread(image_up, flags=cv2.IMREAD_IGNORE_ORIENTATION|cv2.IMREAD_COLOR)   
+            return img_np_bgr[...,::-1]
     else:
-        tfile = tempfile.NamedTemporaryFile(delete=False)
-        tfile.write(image_up.read())
-        img_np_bgr = cv2.imread(tfile.name, flags=cv2.IMREAD_IGNORE_ORIENTATION|cv2.IMREAD_COLOR)   
-        return img_np_bgr[...,::-1]
+        ext = splitext(image_up.name)[-1]
+        if ext== '.tif' or ext=='tiff':
+            img = tifffile.imread(image_up)
+            return img
+        else:
+            tfile = tempfile.NamedTemporaryFile(delete=False)
+            tfile.write(image_up.read())
+            img_np_bgr = cv2.imread(tfile.name, flags=cv2.IMREAD_IGNORE_ORIENTATION|cv2.IMREAD_COLOR)   
+            return img_np_bgr[...,::-1]
     #     file_bytes = np.asarray(bytearray(image_up.read()), dtype=np.uint8)
     #     img_bgr = cv2.imdecode(file_bytes, 1)
     #   return img_bgr[...,::-1]
@@ -67,7 +76,10 @@ def load_crop_wbc_estimation(file_up):
         imgs_padded_cropped.append(img_padded_cropped)
         imgs_1024_padded_cropped.append(img_1024_padded_cropped)
         imgs_small_cropped.append(img_small_cropped)
-        files.append(file.name)
+        if page == 'Thick Smear | Sample images':
+            files.append(file)
+        else:
+            files.append(file.name)
         st_preprocess_bar.progress((n +1) /len(file_up))
         try: 
             calc_radius = preprocess.calculate_WBC_radius(img_small_cropped, prct_reduced= reduction_prct)
@@ -105,6 +117,7 @@ if page == 'Thick Smear | Sample images':
         file_up = img_list[selected_image]
         img = plt.imread(file_up)
         image = img_as_ubyte(img)
+        file_up = [file_up]
     if not file_up:
         st.image(img_list, caption = img_captions[:-1], width = int(698/2))
        
