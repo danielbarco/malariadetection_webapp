@@ -1,6 +1,0 @@
-PyTorch Version: 1.7.1
-CUDA device available: True
-Using CUDA device: cuda:0
-Random Seed: 42
-Output Path: C:\Users\AChub_Lab\Desktop\my_project\st_app\malaria-detection-classification\nbs\logs
-resent

@@ -29,20 +29,23 @@ WORKDIR /
 
 RUN pip install scikit-image
 # RUN pip install torch==1.8.1+cpu torchvision==0.9.1+cpu -f https://download.pytorch.org/whl/torch_stable.html
-RUN pip install torchvision==0.9.1
+# RUN pip install torchvision==0.9.1
 RUN pip install streamlit==0.81
 RUN pip install matplotlib
 # RUN pip install tensorflow==2.4.1
-RUN pip install cellpose==0.6.1
+# RUN pip install cellpose==0.6.1
 RUN pip install protobuf==3.13.0
 # cellpose requires large models, load these from cache with:
-RUN python -c 'from cellpose import models'
+# RUN python -c 'from cellpose import models'
 
-COPY models .
-COPY load_css.py .
-COPY style.css .
-COPY images_thick images_thick
-COPY images_thin images_thin
-COPY app.py .
+# COPY models models
+# COPY style.css .
+# COPY images_thick images_thick
+# # COPY images_thin images_thin
+# COPY load_css.py .
+# COPY preprocess.py .
+# COPY prediction.py .
+# COPY app.py .
+WORKDIR docker/
 ENTRYPOINT ["streamlit","run"]
 CMD ["app.py"]
