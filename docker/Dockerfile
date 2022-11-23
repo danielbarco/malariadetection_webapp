@@ -47,5 +47,4 @@ RUN pip install protobuf==3.13.0
 # COPY prediction.py .
 # COPY app.py .
 WORKDIR docker/
-ENTRYPOINT ["streamlit","run"]
-CMD ["app.py"]
+ENTRYPOINT ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]

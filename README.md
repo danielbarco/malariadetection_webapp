@@ -16,7 +16,7 @@ docker build -t malariadetection_webapp .
 Now you can run the docker file, which starts up the streamlit app:
 
 ```bash
-docker run -it --rm --name malariadetection_webapp -v /home/fight/Documents/malariadetection_webapp/docker:docker  malariadetection_webapp:latest
+docker run -it --rm --name malariadetection_webapp -v /home/fight/Documents/malariadetection_webapp/docker:/docker -p 8501:8501 malariadetection_webapp:latest
 ```
 Follow the link provided in the console and you should be able to see the streamlit app.
  
@@ -35,4 +35,3 @@ cloudflared tunnel run
 ```
 
 Made with ❤️ in Switzerland ⛰️
-  ddd
