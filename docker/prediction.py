@@ -80,13 +80,24 @@ if not os.path.isfile(log_filename):
     df_logs.to_csv(log_filename, index=False)
 
 
-def save_all_predictions(img_result, patient_n, patches_selected, detections, dataset):
-    """"""
+def save_all_predictions(img_result, patient_n, patches_selected, detections, patches_resized):
+    """
+    save the selected patches to a csv in the logging folder
+    :param img_result: result of the image
+    :type img_result: str
+    :param patient_n: patient number
+    :type patient_n: int
+    :param patches_selected: list of selected patches
+    :type patches_selected: list
+    :param detections: dictionary of detections
+    :type detections: dict
+    :param patches_resized: list of resized patches
+    :type patches_resized: list
+    :return: None
+    """
     
-    # save the selected patches to a csv in the logging folder
-    # find the pv_patches_selected in the detections
-    patch_idx = [np.array_equal(patch, patches_selected[i]) for i in range(len(patches_selected))]
-    # save detections to a csv in the logging folder
+    # select the same patches from detections and save to a csv in the logging folder
+    patch_idx = [np.where(np.all(patch == patches_resized, axis=(1, 2, 3)))[0][0] for patch in patches_selected]
     detections_selected = {key: value[patch_idx] for key, value in detections.items()}
     d_detections = pd.DataFrame.from_dict(detections_selected)
     d_detections.to_csv(f'logging/detections/{img_result}_detections_{patient_n}.csv', index=False)
@@ -342,7 +353,7 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
                 if len(pv_all_selected_patches) < 9:
                     pv_all_selected_patches = pv_all_selected_patches + pv_patches_selected
                 if save_predictions:
-                    save_all_predictions(img_result, patient_n, pv_patches_selected, detections)
+                    save_all_predictions(img_result, patient_n, pv_patches_selected, detections, pv_patches_resized)
 
             elif avg_pf > avg_pv:
                 img_result = 'pf'
@@ -352,12 +363,7 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
                 if len(pf_all_selected_patches) < 9:
                     pf_all_selected_patches = pf_all_selected_patches + pf_patches_selected
                 if save_predictions:
-                    # save the selected patches to a csv in the logging folder
-                    # find the pv_patches_selected in the detections
-                    patch_idx = [np.array_equal(patch, pf_patches_selected[i]) for i in range(len(pf_patches_selected))]
-                    detections_selected = {key: value[patch_idx] for key, value in detections.items()}
-                    df_detections = pd.DataFrame.from_dict(detections_selected)
-                    df_detections.to_csv(f'logging/detections/pf_detections_{patient_n}.csv', index=False)
+                    save_all_predictions(img_result, patient_n, pf_patches_selected, detections, pf_patches_resized)
             if verbose:
                 duration = time.time() - start_time
                 print(f'PVF ResNet50 took {round(duration, 2)} seconds')
@@ -371,6 +377,8 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
             total_u.append(0)
             if len(pf_all_selected_patches) < 9:
                 pf_all_selected_patches = pf_all_selected_patches + pf_patches_selected
+            if save_predictions:
+                save_all_predictions(img_result, patient_n, pf_patches_selected, detections, pf_patches_resized)
 
         elif len(pv_patches_selected) > 1 and len(pf_patches_selected) <= 1:
             img_result = 'pv'
@@ -379,6 +387,8 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
             total_u.append(0)
             if len(pv_all_selected_patches) < 9:
                 pv_all_selected_patches = pv_all_selected_patches + pv_patches_selected
+            if save_predictions:
+                save_all_predictions(img_result, patient_n, pv_patches_selected, detections, pv_patches_resized)
 
         elif len(pv_patches_selected) <= 1 and len(pf_patches_selected) <= 1:
             img_result = 'u'
