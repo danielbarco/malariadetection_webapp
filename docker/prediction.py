@@ -255,6 +255,8 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
         # img_full = img_full_bgr[...,::-1]
 
         pil_img_np = Image.fromarray(img_np,"RGB")
+        # if folder does not exist create it
+        os.makedirs(os.path.dirname("logging/imgs/img_np.jpg"), exist_ok=True)
         pil_img_np.save("logging/imgs/img_np.jpg")
         pil_img_full = Image.fromarray(img_full,"RGB")
         pil_img_full.save("logging/imgs/img_full.jpg")
@@ -368,8 +370,7 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
                     'PV_detected': len(pv_patches_resized), 'PV_selected': len(pv_patches_selected), 'PV_prob': avg_pv,\
                     'PF_detected': len(pf_patches_resized), 'PF_selected': len(pf_patches_selected), 'PF_prob': avg_pf, \
                     'dataset': dataset, 'result' : img_result}
-        df_logs = df_logs.append(new_row, ignore_index=True)
-
+        df_logs.loc[len(df_logs)] = new_row
     if verbose:        
         duration = time.time() - total_start_time
         print(f' Total time for {len(img_np)} images {round(duration, 2)} seconds')

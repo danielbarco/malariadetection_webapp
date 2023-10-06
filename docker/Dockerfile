@@ -22,6 +22,7 @@ WORKDIR models/research/
 
 RUN cp object_detection/packages/tf2/setup.py ./
 
+RUN pip install "cython<3.0.0" pyyaml==5.4.1 --no-build-isolation -v
 RUN python -m pip install -U pip
 RUN python -m pip install .
 
@@ -30,11 +31,11 @@ WORKDIR /
 RUN pip install scikit-image
 # RUN pip install torch==1.8.1+cpu torchvision==0.9.1+cpu -f https://download.pytorch.org/whl/torch_stable.html
 # RUN pip install torchvision==0.9.1
-RUN pip install streamlit==0.81
+RUN pip install streamlit
 RUN pip install matplotlib
 # RUN pip install tensorflow==2.4.1
 # RUN pip install cellpose==0.6.1
-RUN pip install protobuf==3.13.0
+RUN pip install protobuf
 # cellpose requires large models, load these from cache with:
 # RUN python -c 'from cellpose import models'
 
@@ -47,5 +48,5 @@ RUN pip install protobuf==3.13.0
 # COPY prediction.py .
 # COPY app.py .
 WORKDIR docker/
-ENTRYPOINT ["streamlit","run"]
-CMD ["app.py"]
+#ENTRYPOINT ["streamlit","run"]
+#CMD ["app.py"]
