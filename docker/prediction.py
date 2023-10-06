@@ -34,9 +34,9 @@ def initiate_classification_model(model_path):
 
 crop_size = 1024
 
-pf_path_cfg = 'models/fasterrcnn_inception_v2_1024_PF_train150000/thick_PF_wh64.config'
-pf_path_ckpt = 'models/fasterrcnn_inception_v2_1024_PF_train150000/ckpt-151'
-pf_model_path = 'models/PF_256_resnet50_custom_PV_PF_86.h5'
+pf_path_cfg = 'docker/models/fasterrcnn_inception_v2_1024_PF_train150000/thick_PF_wh64.config'
+pf_path_ckpt = 'docker/models/fasterrcnn_inception_v2_1024_PF_train150000/ckpt-151'
+pf_model_path = 'docker/models/PF_256_resnet50_custom_PV_PF_86.h5'
 pf_classification_model = initiate_classification_model(pf_model_path)
 pf_detection_model = initiate_detection_model(pf_path_cfg, pf_path_ckpt)
 
@@ -50,9 +50,9 @@ def pf_detection_model_fn(image):
 
     return detections
 
-pv_path_cfg = 'models/fasterrcnn_inception_v2_1024_PV_train150000/thick_PV_wh64.config'
-pv_path_ckpt = 'models/fasterrcnn_inception_v2_1024_PV_train150000/ckpt-151'
-pv_model_path = 'models/PV_256_resnet50_custom.h5'
+pv_path_cfg = 'docker/models/fasterrcnn_inception_v2_1024_PV_train150000/thick_PV_wh64.config'
+pv_path_ckpt = 'docker/models/fasterrcnn_inception_v2_1024_PV_train150000/ckpt-151'
+pv_model_path = 'docker/models/PV_256_resnet50_custom.h5'
 pv_classification_model = initiate_classification_model(pv_model_path)
 pv_detection_model = initiate_detection_model(pv_path_cfg, pv_path_ckpt)
 
@@ -67,7 +67,7 @@ def pv_detection_model_fn(image):
     return detections
 
 
-pvf_model_path = 'models/PVF_256_resnet50_custom.h5'
+pvf_model_path = 'docker/models/PVF_256_resnet50_custom.h5'
 pvf_classification_model = initiate_classification_model(pvf_model_path)
 
 # logging
@@ -79,6 +79,17 @@ if not os.path.isfile(log_filename):
                 'PF_detected', 'PF_selected', 'PF_prob', 'dataset', 'result'])
     df_logs.to_csv(log_filename, index=False)
 
+
+def save_all_predictions(img_result, patient_n, patches_selected, detections, dataset):
+    """"""
+    
+    # save the selected patches to a csv in the logging folder
+    # find the pv_patches_selected in the detections
+    patch_idx = [np.array_equal(patch, patches_selected[i]) for i in range(len(patches_selected))]
+    # save detections to a csv in the logging folder
+    detections_selected = {key: value[patch_idx] for key, value in detections.items()}
+    d_detections = pd.DataFrame.from_dict(detections_selected)
+    d_detections.to_csv(f'logging/detections/{img_result}_detections_{patient_n}.csv', index=False)
 
 def load_image_into_numpy_array(path):
     """Load an image from file into a numpy array.
@@ -236,7 +247,7 @@ def tf_classification(patches, model):
     return model.predict(np.array(patches))
 
 
-def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, dataset = None, verbose = False):
+def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, dataset = None, save_predictions= False, verbose = False):
     total_pf = []
     total_pv = []
     total_u = []
@@ -276,6 +287,7 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
         if len(pf_patches_resized) > 0:
             y_pred = tf_classification(pf_patches_resized, pf_classification_model)
             pf_patches_selected = [patch for patch, label in zip(pf_patches_resized, y_pred) if np.argmax(softmax(label)) == 1]
+            
         else:
             pf_patches_selected = []    
         
@@ -295,6 +307,7 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
         if len(pv_patches_resized) > 0:
             y_pred = tf_classification(pv_patches_resized, pv_classification_model)
             pv_patches_selected = [patch for patch, label in zip(pv_patches_resized, y_pred) if np.argmax(softmax(label)) == 1]
+
         else:
             pv_patches_selected = []
         
@@ -328,6 +341,9 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
                 total_u.append(0)
                 if len(pv_all_selected_patches) < 9:
                     pv_all_selected_patches = pv_all_selected_patches + pv_patches_selected
+                if save_predictions:
+                    save_all_predictions(img_result, patient_n, pv_patches_selected, detections)
+
             elif avg_pf > avg_pv:
                 img_result = 'pf'
                 total_pf.append(len(pf_patches_selected))
@@ -335,6 +351,13 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
                 total_u.append(0)
                 if len(pf_all_selected_patches) < 9:
                     pf_all_selected_patches = pf_all_selected_patches + pf_patches_selected
+                if save_predictions:
+                    # save the selected patches to a csv in the logging folder
+                    # find the pv_patches_selected in the detections
+                    patch_idx = [np.array_equal(patch, pf_patches_selected[i]) for i in range(len(pf_patches_selected))]
+                    detections_selected = {key: value[patch_idx] for key, value in detections.items()}
+                    df_detections = pd.DataFrame.from_dict(detections_selected)
+                    df_detections.to_csv(f'logging/detections/pf_detections_{patient_n}.csv', index=False)
             if verbose:
                 duration = time.time() - start_time
                 print(f'PVF ResNet50 took {round(duration, 2)} seconds')
