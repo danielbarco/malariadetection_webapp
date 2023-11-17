@@ -34,9 +34,9 @@ def initiate_classification_model(model_path):
 
 crop_size = 1024
 
-pf_path_cfg = 'docker/models/fasterrcnn_inception_v2_1024_PF_train150000/thick_PF_wh64.config'
-pf_path_ckpt = 'docker/models/fasterrcnn_inception_v2_1024_PF_train150000/ckpt-151'
-pf_model_path = 'docker/models/PF_256_resnet50_custom_PV_PF_86.h5'
+pf_path_cfg = 'malariadetection_webapp/docker/models/fasterrcnn_inception_v2_1024_PF_train150000/thick_PF_wh64.config'
+pf_path_ckpt = 'malariadetection_webapp/docker/models/fasterrcnn_inception_v2_1024_PF_train150000/ckpt-151'
+pf_model_path = 'malariadetection_webapp/docker/models/PF_256_resnet50_custom_PV_PF_86.h5'
 pf_classification_model = initiate_classification_model(pf_model_path)
 pf_detection_model = initiate_detection_model(pf_path_cfg, pf_path_ckpt)
 
@@ -50,9 +50,9 @@ def pf_detection_model_fn(image):
 
     return detections
 
-pv_path_cfg = 'docker/models/fasterrcnn_inception_v2_1024_PV_train150000/thick_PV_wh64.config'
-pv_path_ckpt = 'docker/models/fasterrcnn_inception_v2_1024_PV_train150000/ckpt-151'
-pv_model_path = 'docker/models/PV_256_resnet50_custom.h5'
+pv_path_cfg = 'malariadetection_webapp/docker/models/fasterrcnn_inception_v2_1024_PV_train150000/thick_PV_wh64.config'
+pv_path_ckpt = 'malariadetection_webapp/docker/models/fasterrcnn_inception_v2_1024_PV_train150000/ckpt-151'
+pv_model_path = 'malariadetection_webapp/docker/models/PV_256_resnet50_custom.h5'
 pv_classification_model = initiate_classification_model(pv_model_path)
 pv_detection_model = initiate_detection_model(pv_path_cfg, pv_path_ckpt)
 
@@ -67,7 +67,7 @@ def pv_detection_model_fn(image):
     return detections
 
 
-pvf_model_path = 'docker/models/PVF_256_resnet50_custom.h5'
+pvf_model_path = 'malariadetection_webapp/docker/models/PVF_256_resnet50_custom.h5'
 pvf_classification_model = initiate_classification_model(pvf_model_path)
 
 # logging
