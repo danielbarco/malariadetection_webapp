@@ -15,6 +15,8 @@ from six import BytesIO
 import cv2
 import random
 import os
+from matplotlib import pyplot as plt
+
 
 
 def initiate_detection_model(path_cfg, path_ckpt):
@@ -71,7 +73,7 @@ pvf_model_path = 'malariadetection_webapp/docker/models/PVF_256_resnet50_custom.
 pvf_classification_model = initiate_classification_model(pvf_model_path)
 
 # logging
-log_filename = "logging/logs.csv"
+log_filename = "/workspace/malariadetection_webapp/logging/logs.csv"
 os.makedirs(os.path.dirname(log_filename), exist_ok=True)
 if not os.path.isfile(log_filename):
     df_logs = pd.DataFrame(columns = ['patient_n', 'img', 'model_score_thr', \
@@ -80,13 +82,9 @@ if not os.path.isfile(log_filename):
     df_logs.to_csv(log_filename, index=False)
 
 
-def save_all_predictions(img_result, patient_n, patches_selected, detections, patches_resized):
+def return_selected_predictions(patches_selected, detections, patches_resized):
     """
-    save the selected patches to a csv in the logging folder
-    :param img_result: result of the image
-    :type img_result: str
-    :param patient_n: patient number
-    :type patient_n: int
+    return the selected patches 
     :param patches_selected: list of selected patches
     :type patches_selected: list
     :param detections: dictionary of detections
@@ -98,9 +96,9 @@ def save_all_predictions(img_result, patient_n, patches_selected, detections, pa
     
     # select the same patches from detections and save to a csv in the logging folder
     patch_idx = [np.where(np.all(patch == patches_resized, axis=(1, 2, 3)))[0][0] for patch in patches_selected]
-    detections_selected = {key: value[patch_idx] for key, value in detections.items()}
-    d_detections = pd.DataFrame.from_dict(detections_selected)
-    d_detections.to_csv(f'logging/detections/{img_result}_detections_{patient_n}.csv', index=False)
+    detections_selected = {key: value[patch_idx].tolist() for key, value in detections.items()}
+    return detections_selected
+    
 
 def load_image_into_numpy_array(path):
     """Load an image from file into a numpy array.
@@ -217,6 +215,7 @@ def cut_patches(detections, img_full, model_score_thr = 0.5, input_img_size = 10
     detections['detection_scores'] = np.array(detections['detection_scores'])[arg_sort]
     detections['detection_boxes'] = np.array(detections['detection_boxes'])[arg_sort]
     
+    
     # keep detections with detection_socres above the model_score_thr
     thr_detections = detections.copy()
     thr_detections['detection_boxes'] = detections['detection_boxes'][detections['detection_scores'] > model_score_thr]
@@ -258,7 +257,7 @@ def tf_classification(patches, model):
     return model.predict(np.array(patches))
 
 
-def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, dataset = None, save_predictions= False, verbose = False):
+def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, dataset = None, return_predictions= False, verbose = False):
     total_pf = []
     total_pv = []
     total_u = []
@@ -288,12 +287,13 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
         detections = object_detection(img_np, pf_detection_model_fn)
         if verbose:
             duration = time.time() - start_time
-            print(f'PF detection took {round(duration, 2)} seconds')
+            print(f'PF detection took {round(duration, 2)} seconds, {len(detections["detection_boxes"])} detections')
 
-        pf_patches_resized = cut_patches(detections, img_full, model_score_thr = model_score_thr , input_img_size = 1024, out_img_size = 256)
-        for n, patch in enumerate(pf_patches_resized[0:5]):
-            pil_patch = Image.fromarray(patch,"RGB")
-            pil_patch.save(f"logging/imgs/pf_patch_{n}.jpg")
+        pf_patches_resized = cut_patches(detections, img_full, model_score_thr = 0.5, input_img_size = 1024, out_img_size = 256)
+        if verbose:
+            for n, patch in enumerate(pf_patches_resized[0:5]):
+                pil_patch = Image.fromarray(patch,"RGB")
+                pil_patch.save(f"logging/imgs/pf_patch_{n}.jpg")
         start_time = time.time()
         if len(pf_patches_resized) > 0:
             y_pred = tf_classification(pf_patches_resized, pf_classification_model)
@@ -311,7 +311,7 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
         detections = object_detection(img_np, pv_detection_model_fn)
         if verbose:
             duration= time.time() - start_time   
-            print(f'PV detection took {round(duration, 2)} seconds')
+            print(f'PV detection took {round(duration, 2)} seconds, {len(detections["detection_boxes"])} detections')
 
         pv_patches_resized = cut_patches(detections, img_full, model_score_thr = model_score_thr, input_img_size = 1024, out_img_size = 256)
         start_time = time.time()
@@ -352,8 +352,8 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
                 total_u.append(0)
                 if len(pv_all_selected_patches) < 9:
                     pv_all_selected_patches = pv_all_selected_patches + pv_patches_selected
-                if save_predictions:
-                    save_all_predictions(img_result, patient_n, pv_patches_selected, detections, pv_patches_resized)
+                if return_predictions:
+                    selected_predictions = return_selected_predictions(img_result, patient_n, pv_patches_selected, detections, pv_patches_resized)
 
             elif avg_pf > avg_pv:
                 img_result = 'pf'
@@ -362,8 +362,9 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
                 total_u.append(0)
                 if len(pf_all_selected_patches) < 9:
                     pf_all_selected_patches = pf_all_selected_patches + pf_patches_selected
-                if save_predictions:
-                    save_all_predictions(img_result, patient_n, pf_patches_selected, detections, pf_patches_resized)
+                if return_predictions:
+                    selected_predictions = return_selected_predictions(img_result, patient_n, pf_patches_selected, detections, pf_patches_resized)
+
             if verbose:
                 duration = time.time() - start_time
                 print(f'PVF ResNet50 took {round(duration, 2)} seconds')
@@ -377,8 +378,8 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
             total_u.append(0)
             if len(pf_all_selected_patches) < 9:
                 pf_all_selected_patches = pf_all_selected_patches + pf_patches_selected
-            if save_predictions:
-                save_all_predictions(img_result, patient_n, pf_patches_selected, detections, pf_patches_resized)
+            if return_predictions:
+                selected_predictions = return_selected_predictions(pf_patches_selected, detections, pf_patches_resized)
 
         elif len(pv_patches_selected) > 1 and len(pf_patches_selected) <= 1:
             img_result = 'pv'
@@ -387,14 +388,16 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
             total_u.append(0)
             if len(pv_all_selected_patches) < 9:
                 pv_all_selected_patches = pv_all_selected_patches + pv_patches_selected
-            if save_predictions:
-                save_all_predictions(img_result, patient_n, pv_patches_selected, detections, pv_patches_resized)
+            if return_predictions:
+                selected_predictions = return_selected_predictions(img_result, patient_n, pv_patches_selected, detections, pv_patches_resized)
 
         elif len(pv_patches_selected) <= 1 and len(pf_patches_selected) <= 1:
             img_result = 'u'
             total_u.append(1)
             total_pv.append(0)
             total_pf.append(0)
+            if return_predictions:
+                selected_predictions = []
         
         else:
             raise Exception('Something went wrong and no totals were added!')
@@ -426,5 +429,7 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
     else:
         raise Exception('could not classify')
 
-
-    return result, selected_patches
+    if return_predictions:
+        return result, selected_patches, selected_predictions
+    else:
+        return result, selected_patches

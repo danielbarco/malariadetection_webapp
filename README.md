@@ -34,5 +34,16 @@ To access the cloudflare tunnel at demo.malariadetection.ch run. This requires s
 cloudflared tunnel run
 ```
 
+**Run DGX**
+
+```bash
+docker run -it --runtime=nvidia --memory="16g" --memory-swap=-1 --oom-kill-disable --rm --name dualx -v /cluster/home/baoc/dualx/detect_malaria:/workspace/detect_malaria -v /cluster/home/baoc/dualx/malariadetection_webapp:/workspace/malariadetection_webapp -v /cluster/home/baoc/data/malaria:/workspace/data/ -p 8970:8501 malariadetection_webapp:latest
+```
+
+```bash
+streamlit run /workspace/malariadetection_webapp/docker/app.py  --server.fileWatcherType none --server.address 0.0.0.0
+```
+
+
 Made with ❤️ in Switzerland ⛰️
-  ddd
+

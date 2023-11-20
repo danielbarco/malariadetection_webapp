@@ -1,4 +1,4 @@
-FROM tensorflow/tensorflow:latest-gpu
+FROM nvcr.io/nvidia/tensorrt:23.10-py3
 EXPOSE 8501
 
 WORKDIR /app
@@ -13,6 +13,14 @@ RUN apt-get update && apt-get install -y \
     protobuf-compiler \
     wget \
     git
+
+# Install Python and pip
+RUN apt-get update && apt-get install -y \
+    python3.9 python3-pip && \
+    rm -rf /var/lib/apt/lists/* && \
+    ln -sf /usr/bin/pip3 /usr/bin/pip
+
+RUN ln -sf /usr/bin/python3 /usr/bin/python
 
 RUN git clone --depth 1 https://github.com/tensorflow/models
 
@@ -33,7 +41,7 @@ RUN pip install scikit-image
 # RUN pip install torchvision==0.9.1
 RUN pip install streamlit
 RUN pip install matplotlib
-# RUN pip install tensorflow==2.4.1
+RUN pip install tensorflow
 # RUN pip install cellpose==0.6.1
 RUN pip install protobuf
 # cellpose requires large models, load these from cache with:
