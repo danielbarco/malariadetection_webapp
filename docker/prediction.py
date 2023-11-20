@@ -38,7 +38,7 @@ crop_size = 1024
 
 pf_path_cfg = 'malariadetection_webapp/docker/models/fasterrcnn_inception_v2_1024_PF_train150000/thick_PF_wh64.config'
 pf_path_ckpt = 'malariadetection_webapp/docker/models/fasterrcnn_inception_v2_1024_PF_train150000/ckpt-151'
-pf_model_path = 'malariadetection_webapp/docker/models/PF_256_resnet50_custom_PV_PF_86.h5'
+pf_model_path = 'malariadetection_webapp/docker/models/PFU_256_resnet50_custom.h5'
 pf_classification_model = initiate_classification_model(pf_model_path)
 pf_detection_model = initiate_detection_model(pf_path_cfg, pf_path_ckpt)
 
@@ -73,7 +73,7 @@ pvf_model_path = 'malariadetection_webapp/docker/models/PVF_256_resnet50_custom.
 pvf_classification_model = initiate_classification_model(pvf_model_path)
 
 # logging
-log_filename = "/workspace/malariadetection_webapp/logging/logs.csv"
+log_filename = "/malariadetection_webapp/logging/docker/logs.csv"
 os.makedirs(os.path.dirname(log_filename), exist_ok=True)
 if not os.path.isfile(log_filename):
     df_logs = pd.DataFrame(columns = ['patient_n', 'img', 'model_score_thr', \
@@ -277,23 +277,22 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
 
         pil_img_np = Image.fromarray(img_np,"RGB")
         # if folder does not exist create it
-        os.makedirs(os.path.dirname("logging/imgs/img_np.jpg"), exist_ok=True)
-        pil_img_np.save("logging/imgs/img_np.jpg")
+        os.makedirs(os.path.dirname("malariadetection_webapp/logging/docker/imgs/img_np.jpg"), exist_ok=True)
+        pil_img_np.save("malariadetection_webapp/logging/docker/imgs/img_np.jpg")
         pil_img_full = Image.fromarray(img_full,"RGB")
-        pil_img_full.save("logging/imgs/img_full.jpg")
+        pil_img_full.save("malariadetection_webapp/logging/docker/imgs/img_full.jpg")
 
         # Falciparum object detection & filter with ResNet50
         start_time = time.time()
         detections = object_detection(img_np, pf_detection_model_fn)
+        pf_patches_resized = cut_patches(detections, img_full, model_score_thr = 0.5, input_img_size = 1024, out_img_size = 256)
+
         if verbose:
             duration = time.time() - start_time
-            print(f'PF detection took {round(duration, 2)} seconds, {len(detections["detection_boxes"])} detections')
-
-        pf_patches_resized = cut_patches(detections, img_full, model_score_thr = 0.5, input_img_size = 1024, out_img_size = 256)
-        if verbose:
+            print(f'PF detection took {round(duration, 2)} seconds, {len(pf_patches_resized)} detections')
             for n, patch in enumerate(pf_patches_resized[0:5]):
                 pil_patch = Image.fromarray(patch,"RGB")
-                pil_patch.save(f"logging/imgs/pf_patch_{n}.jpg")
+                pil_patch.save(f"malariadetection_webapp/logging/docker/imgs/pf_patch_{n}.jpg")
         start_time = time.time()
         if len(pf_patches_resized) > 0:
             y_pred = tf_classification(pf_patches_resized, pf_classification_model)
@@ -304,16 +303,17 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
         
         if verbose:
             duration = time.time() - start_time
-            print(f'PF ResNet50 took {round(duration, 2)} seconds')
+            print(f'PF ResNet50 took {round(duration, 2)} seconds, {len(pf_patches_selected)} detections')
 
         # Vivax object detection & filter with ResNet50
         start_time = time.time()
         detections = object_detection(img_np, pv_detection_model_fn)
+        pv_patches_resized = cut_patches(detections, img_full, model_score_thr = model_score_thr, input_img_size = 1024, out_img_size = 256)
+        
         if verbose:
             duration= time.time() - start_time   
-            print(f'PV detection took {round(duration, 2)} seconds, {len(detections["detection_boxes"])} detections')
-
-        pv_patches_resized = cut_patches(detections, img_full, model_score_thr = model_score_thr, input_img_size = 1024, out_img_size = 256)
+            print(f'PV detection took {round(duration, 2)} seconds, {len(pv_patches_resized)} detections')
+        
         start_time = time.time()
         if len(pv_patches_resized) > 0:
             y_pred = tf_classification(pv_patches_resized, pv_classification_model)
@@ -324,7 +324,7 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
         
         if verbose: 
             duration= time.time() - start_time   
-            print(f'PV ResNet50 took {round(duration, 2)} seconds')
+            print(f'PV ResNet50 took {round(duration, 2)} seconds, {len(pv_patches_selected)} detections')
         
         # for logging purposes
         avg_pf, avg_pv = -1, -1
@@ -350,20 +350,18 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
                 total_pv.append(len(pv_patches_selected))
                 total_pf.append(0)
                 total_u.append(0)
-                if len(pv_all_selected_patches) < 9:
-                    pv_all_selected_patches = pv_all_selected_patches + pv_patches_selected
+                pv_all_selected_patches = pv_all_selected_patches + pv_patches_selected
                 if return_predictions:
-                    selected_predictions = return_selected_predictions(img_result, patient_n, pv_patches_selected, detections, pv_patches_resized)
+                    selected_predictions = return_selected_predictions( pv_patches_selected, detections, pv_patches_resized)
 
             elif avg_pf > avg_pv:
                 img_result = 'pf'
                 total_pf.append(len(pf_patches_selected))
                 total_pv.append(0)
                 total_u.append(0)
-                if len(pf_all_selected_patches) < 9:
-                    pf_all_selected_patches = pf_all_selected_patches + pf_patches_selected
+                pf_all_selected_patches = pf_all_selected_patches + pf_patches_selected
                 if return_predictions:
-                    selected_predictions = return_selected_predictions(img_result, patient_n, pf_patches_selected, detections, pf_patches_resized)
+                    selected_predictions = return_selected_predictions( pf_patches_selected, detections, pf_patches_resized)
 
             if verbose:
                 duration = time.time() - start_time
@@ -376,8 +374,7 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
             total_pf.append(len(pf_patches_selected))
             total_pv.append(0)
             total_u.append(0)
-            if len(pf_all_selected_patches) < 9:
-                pf_all_selected_patches = pf_all_selected_patches + pf_patches_selected
+            pf_all_selected_patches = pf_all_selected_patches + pf_patches_selected
             if return_predictions:
                 selected_predictions = return_selected_predictions(pf_patches_selected, detections, pf_patches_resized)
 
@@ -386,10 +383,9 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
             total_pv.append(len(pv_patches_selected))
             total_pf.append(0)
             total_u.append(0)
-            if len(pv_all_selected_patches) < 9:
-                pv_all_selected_patches = pv_all_selected_patches + pv_patches_selected
+            pv_all_selected_patches = pv_all_selected_patches + pv_patches_selected
             if return_predictions:
-                selected_predictions = return_selected_predictions(img_result, patient_n, pv_patches_selected, detections, pv_patches_resized)
+                selected_predictions = return_selected_predictions(pv_patches_selected, detections, pv_patches_resized)
 
         elif len(pv_patches_selected) <= 1 and len(pf_patches_selected) <= 1:
             img_result = 'u'
@@ -428,6 +424,9 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
         selected_patches = pv_all_selected_patches
     else:
         raise Exception('could not classify')
+    
+    if verbose:
+        print('patient was classified as:', result)
 
     if return_predictions:
         return result, selected_patches, selected_predictions

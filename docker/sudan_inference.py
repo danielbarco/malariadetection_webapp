@@ -11,8 +11,6 @@ import tensorflow as tf
 
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
-img_path = '/workspace/malariadetection_webapp/docker/images_thick/20170714_170303.jpg'
-img_path = '/workspace/data/SudanData/GS/thick/images/Positive P. Falciparum/0011a_1/20201019_172101_Thick.png'
 
 # create annotations & img folder if it does not exist
 os.makedirs('/workspace/data/SudanData/predictions/cropped', exist_ok=True)
@@ -21,8 +19,8 @@ os.makedirs('/workspace/data/SudanData/metadata/cropped', exist_ok=True)
 
 # get list of all images in folder
 img_paths = glob.glob('/workspace/data/SudanData/**/*Thick.png', recursive=True)
-img_paths = glob.glob('/workspace/data/SudanData/**/*Thick.png', recursive=True)
-
+img_paths = glob.glob('/workspace/data/SudanData/GS/thick/images/*/0011a_1/*Thick.png', recursive=True)
+# img_paths = glob.glob('/workspace/malariadetection_webapp/docker/images_thick/*3.jpg', recursive=True)
 
 # devide the img_paths list into chunks defined by patient id (e.g. 0011a_1)
 img_paths_patients = [[path for path in patient_paths] for patient_id, patient_paths in itertools.groupby(img_paths, lambda x: x.split('/')[-2])]
@@ -38,7 +36,7 @@ for patient_paths, patient_id in zip(img_paths_patients, patient_ids):
     for img_path in patient_paths:
         img = cv2.imread(img_path, flags=cv2.IMREAD_IGNORE_ORIENTATION|cv2.IMREAD_COLOR)   
         height, width, c = img.shape
-        reduction_prct = 630/ min([height, width]) 
+        reduction_prct = 600/ min([height, width]) 
         img_small = cv2.resize(img, None, fx=reduction_prct, fy=reduction_prct)
         img_small_cropped, xmin, xmax, ymin, ymax  = preprocess.circle_crop(img_small)
         img_cropped =     img[int(xmin * width):int(xmax * width),
@@ -56,7 +54,7 @@ for patient_paths, patient_id in zip(img_paths_patients, patient_ids):
         
     # prediction
     time_start = time.time()
-    result, selected_patches, selected_predictions = prediction.patient_eval(imgs_1024_padded_cropped, imgs_padded_cropped, model_score_thr = 0.5, return_predictions = True, verbose=True)
+    result, selected_patches, selected_predictions = prediction.patient_eval(imgs_1024_padded_cropped, imgs_padded_cropped,patient_n = patient_id, model_score_thr = 0.5, return_predictions = True, verbose=True)
     prediction_time = time.time() - time_start
     
     # save the cropped predictions annotations as txt files
@@ -75,11 +73,11 @@ for patient_paths, patient_id in zip(img_paths_patients, patient_ids):
             f.write( '0' + ' ' + str(xmin) + ' ' + str(ymin) + ' ' + str(xmax) + ' ' + str(ymax) + '\n')
 
     # save metadata to text file
-    metadata = str(patient_id) + ' ' + str(result) + ' ' + str(len(selected_patches)) 
+    metadata = str(patient_id) + ' ' + str(result) + ' ' + str(len(selected_predictions)) 
     # append patient metadata to metadata text file
     with open('/workspace/data/SudanData/metadata/cropped/metadata.txt', 'a') as f:
         f.write(str(metadata) + '\n')
     # save additional metadata to text file
-    metadata_debug = str(patient_id) + ' ' + str(result) + ' ' + str(len(selected_patches)) + ' ' + str(prediction_time) + ' ' + str(files)
+    metadata_debug = str(patient_id) + ' ' + str(result) + ' ' + str(len(selected_predictions)) + ' ' + str(prediction_time) + ' ' + str(files)
     with open('/workspace/data/SudanData/metadata/cropped/metadata_debug.txt', 'a') as f:
         f.write(str(metadata_debug) + '\n')
