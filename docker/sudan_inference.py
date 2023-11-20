@@ -20,6 +20,7 @@ os.makedirs('/workspace/data/SudanData/metadata/cropped', exist_ok=True)
 # get list of all images in folder
 img_paths = glob.glob('/workspace/data/SudanData/**/*Thick.png', recursive=True)
 img_paths = glob.glob('/workspace/data/SudanData/GS/thick/images/*/0011a_1/*Thick.png', recursive=True)
+img_paths = glob.glob('/workspace/data/SudanData/SOR/thick/images/*/0138a_1/*Thick.png', recursive=True)
 # img_paths = glob.glob('/workspace/malariadetection_webapp/docker/images_thick/*3.jpg', recursive=True)
 
 # devide the img_paths list into chunks defined by patient id (e.g. 0011a_1)

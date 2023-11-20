@@ -38,7 +38,7 @@ crop_size = 1024
 
 pf_path_cfg = 'malariadetection_webapp/docker/models/fasterrcnn_inception_v2_1024_PF_train150000/thick_PF_wh64.config'
 pf_path_ckpt = 'malariadetection_webapp/docker/models/fasterrcnn_inception_v2_1024_PF_train150000/ckpt-151'
-pf_model_path = 'malariadetection_webapp/docker/models/PFU_256_resnet50_custom.h5'
+pf_model_path = 'malariadetection_webapp/docker/models/PF_256_resnet50_custom_PV_PF_86.h5'
 pf_classification_model = initiate_classification_model(pf_model_path)
 pf_detection_model = initiate_detection_model(pf_path_cfg, pf_path_ckpt)
 
@@ -73,7 +73,7 @@ pvf_model_path = 'malariadetection_webapp/docker/models/PVF_256_resnet50_custom.
 pvf_classification_model = initiate_classification_model(pvf_model_path)
 
 # logging
-log_filename = "/malariadetection_webapp/logging/docker/logs.csv"
+log_filename = "/malariadetection_webapp/docker/logging/logs.csv"
 os.makedirs(os.path.dirname(log_filename), exist_ok=True)
 if not os.path.isfile(log_filename):
     df_logs = pd.DataFrame(columns = ['patient_n', 'img', 'model_score_thr', \
@@ -277,10 +277,10 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
 
         pil_img_np = Image.fromarray(img_np,"RGB")
         # if folder does not exist create it
-        os.makedirs(os.path.dirname("malariadetection_webapp/logging/docker/imgs/img_np.jpg"), exist_ok=True)
-        pil_img_np.save("malariadetection_webapp/logging/docker/imgs/img_np.jpg")
+        os.makedirs(os.path.dirname("malariadetection_webapp/docker/logging/imgs/img_np.jpg"), exist_ok=True)
+        pil_img_np.save("malariadetection_webapp/docker/logging/imgs/img_np.jpg")
         pil_img_full = Image.fromarray(img_full,"RGB")
-        pil_img_full.save("malariadetection_webapp/logging/docker/imgs/img_full.jpg")
+        pil_img_full.save("malariadetection_webapp/docker/logging/imgs/img_full.jpg")
 
         # Falciparum object detection & filter with ResNet50
         start_time = time.time()
@@ -292,7 +292,7 @@ def patient_eval(imgs_np, imgs_full, patient_n = -1, model_score_thr = 0.5, data
             print(f'PF detection took {round(duration, 2)} seconds, {len(pf_patches_resized)} detections')
             for n, patch in enumerate(pf_patches_resized[0:5]):
                 pil_patch = Image.fromarray(patch,"RGB")
-                pil_patch.save(f"malariadetection_webapp/logging/docker/imgs/pf_patch_{n}.jpg")
+                pil_patch.save(f"malariadetection_webapp/docker/logging/imgs/pf_patch_{n}.jpg")
         start_time = time.time()
         if len(pf_patches_resized) > 0:
             y_pred = tf_classification(pf_patches_resized, pf_classification_model)
